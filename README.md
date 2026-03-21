@@ -57,7 +57,7 @@ User Prompt (via chat UI)
 ┌─────────────────────────┐
 │  Chat UI                │  React + Vite · Syne + JetBrains Mono
 │  Auth: login/register   │  Greeting: "Hello, username!"
-│  Sidebar: job history   │  MongoDB chat history + delete
+│  Sidebar: job history   │  DynamoDB chat history + in-memory fallback
 │  Live log: SSE stream   │  Pipeline stepper + filter chips
 │  Result card: 5 tabs    │  Summary · Dataset · Model · Files · Explain
 │  Explain panel: 6 tabs  │  Narrative · Algorithm · Data · Usage · Code · Diagram
@@ -72,7 +72,6 @@ User Prompt (via chat UI)
 
 ```bash
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
 # For architecture diagrams (optional but recommended):
 # Ubuntu/Debian:
 apt-get install graphviz
@@ -82,7 +81,8 @@ brew install graphviz
 
 ### 2. Configure credentials
 
-Edit `config.yaml`:
+Copy `.env.example` to `.env` or export the same environment variables. `config.yaml`
+is intentionally sanitized in git and acts as a safe default template:
 
 ```yaml
 kaggle:
@@ -93,17 +93,18 @@ aws:
   s3_bucket:       "your-bucket-name"
   sagemaker_role:  "arn:aws:iam::ACCOUNT:role/SageMakerExecutionRole"
 
-llm:
-  gemini_api_key: "YOUR_GEMINI_API_KEY"   # free tier: 1M tokens/day
+gemini:
+  api_key: "YOUR_GEMINI_API_KEY"
 
 auth:
   jwt_secret_key: "change-this-to-a-long-random-string"
 ```
 
-### 3. Start MongoDB (optional — app works without it)
+### 3. Configure NoSQL history (optional but recommended)
 
 ```bash
-mongod --dbpath ./data/mongo
+# Default provider: DynamoDB
+# Table name: radml-chat-history
 ```
 
 ### 4. Start the backend
@@ -164,7 +165,7 @@ RAD-ML/
 │   ├── backend/
 │   │   ├── app.py                      ← Flask REST API + JWT auth
 │   │   ├── auth_db.py                  ← SQLite users (bcrypt)
-│   │   ├── chat_history_db.py          ← MongoDB + in-memory fallback
+│   │   ├── chat_history_db.py          ← DynamoDB + in-memory fallback
 │   │   └── orchestrator.py             ← job lifecycle
 │   └── frontend/src/
 │       ├── App.jsx                     ← auth router + chat layout

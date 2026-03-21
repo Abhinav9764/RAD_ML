@@ -65,7 +65,6 @@ def run_full_debug(config: dict) -> dict:
         "boto3":              "pip install boto3",
     }
     optional_packages = {
-        "pymongo":  "pip install pymongo  (optional: for persistent chat history)",
         "sagemaker":"pip install sagemaker  (optional: for AWS ML training)",
         "diagrams": "pip install diagrams  (optional: for architecture diagrams)",
     }
@@ -139,7 +138,7 @@ def run_full_debug(config: dict) -> dict:
                        "message": "Skipped — credentials not set", "fix": None})
 
     # ── 5. Gemini API key ─────────────────────────────────────────────────────
-    gemini_key = config.get("llm", {}).get("gemini_api_key", "").strip()
+    gemini_key = config.get("gemini", {}).get("api_key", "").strip()
     if not gemini_key or gemini_key.startswith("YOUR_") or len(gemini_key) < 10:
         checks.append({
             "name": "Gemini API key", "status": "error",
@@ -147,7 +146,7 @@ def run_full_debug(config: dict) -> dict:
             "fix": (
                 "1. Go to https://aistudio.google.com/apikey\n"
                 "2. Click 'Create API key'\n"
-                "3. Set llm.gemini_api_key in config.yaml"
+                "3. Set gemini.api_key in config.yaml"
             ),
         })
     else:
@@ -167,7 +166,7 @@ def run_full_debug(config: dict) -> dict:
             checks.append({
                 "name": "Gemini API test", "status": "error",
                 "message": f"API call failed: {exc}",
-                "fix": "Check llm.gemini_api_key in config.yaml. Ensure billing is not required.",
+                "fix": "Check gemini.api_key in config.yaml. Ensure the key is valid and enabled.",
             })
     else:
         checks.append({"name": "Gemini API test", "status": "warning",
@@ -258,22 +257,39 @@ def run_full_debug(config: dict) -> dict:
                 ),
             })
 
-    # ── 10. MongoDB connectivity (optional) ───────────────────────────────────
-    mongo_uri = config.get("mongodb", {}).get("uri", "mongodb://localhost:27017")
-    try:
-        from pymongo import MongoClient
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
-        client.admin.command("ping")
-        checks.append({"name": "MongoDB", "status": "ok",
-                       "message": f"Connected to {mongo_uri}", "fix": None})
-    except ImportError:
-        checks.append({"name": "MongoDB", "status": "warning",
-                       "message": "pymongo not installed — using in-memory history",
-                       "fix": "pip install pymongo  (optional)"})
-    except Exception as exc:
-        checks.append({"name": "MongoDB", "status": "warning",
-                       "message": f"Not reachable ({exc}) — using in-memory history",
-                       "fix": "Start MongoDB locally or update mongodb.uri in config.yaml"})
+    # ── 10. NoSQL history store (DynamoDB) ─────────────────────────────────────
+    nosql_cfg = config.get("nosql", {})
+    nosql_provider = str(nosql_cfg.get("provider", "dynamodb")).lower()
+    nosql_region = nosql_cfg.get("region") or aws_region
+    nosql_table = nosql_cfg.get("table_name", "radml-chat-history")
+    nosql_endpoint = nosql_cfg.get("endpoint_url", "").strip()
+    if nosql_provider != "dynamodb":
+        checks.append({"name": "NoSQL history", "status": "warning",
+                       "message": f"Unsupported provider '{nosql_provider}'",
+                       "fix": "Use nosql.provider: dynamodb in config.yaml"})
+    elif not aws_key or not aws_secret:
+        checks.append({"name": "NoSQL history", "status": "warning",
+                       "message": "AWS credentials not set - history will fall back to memory",
+                       "fix": "Set aws.access_key_id and aws.secret_access_key for DynamoDB persistence"})
+    else:
+        try:
+            import boto3
+            kwargs = {
+                "region_name": nosql_region,
+                "aws_access_key_id": aws_key,
+                "aws_secret_access_key": aws_secret,
+            }
+            if nosql_endpoint:
+                kwargs["endpoint_url"] = nosql_endpoint
+            dynamodb = boto3.resource("dynamodb", **kwargs)
+            table = dynamodb.Table(nosql_table)
+            table.load()
+            checks.append({"name": "NoSQL history", "status": "ok",
+                           "message": f"DynamoDB table '{nosql_table}' reachable", "fix": None})
+        except Exception as exc:
+            checks.append({"name": "NoSQL history", "status": "warning",
+                           "message": f"DynamoDB not reachable ({exc}) - using in-memory history",
+                           "fix": f"Create the DynamoDB table '{nosql_table}' or update nosql settings in config.yaml"})
 
     # ── 11. Config file found ─────────────────────────────────────────────────
     cfg_path = PROJECT_ROOT / "config.yaml" if "PROJECT_ROOT" in dir() else Path("config.yaml")

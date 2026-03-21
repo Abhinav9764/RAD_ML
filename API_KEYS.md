@@ -8,7 +8,7 @@
 | 2 | Gemini API key | https://aistudio.google.com/apikey → "Create API key" | ✅ Yes |
 | 3 | AWS credentials | AWS Console → IAM → Users → Security credentials | ⚠️ Optional (mock mode) |
 | 4 | OpenML API key | https://www.openml.org/auth/sign-up | ❌ Optional (anonymous ok) |
-| 5 | MongoDB | Install locally OR use Atlas free tier | ❌ Optional (in-memory fallback) |
+| 5 | DynamoDB table | AWS Console → DynamoDB | ❌ Optional (in-memory fallback) |
 
 ---
 
@@ -113,24 +113,21 @@ Anonymous access works for most searches. An API key raises rate limits.
 
 ---
 
-## 5. MongoDB (OPTIONAL)
+## 5. DynamoDB History Table (OPTIONAL)
 
-Without MongoDB, chat history is stored in-memory (lost on restart).
+Without DynamoDB, chat history is stored in-memory and is lost on restart.
 
-**Local installation:**
-```bash
-# Windows: https://www.mongodb.com/try/download/community
-# Mac:     brew install mongodb-community
-# Linux:   sudo apt install mongodb
-```
-
-**MongoDB Atlas (free cloud):**
-1. https://www.mongodb.com/cloud/atlas/register
-2. Create free cluster → "Connect" → get connection string
-3. Set in `config.yaml`:
+1. Open AWS Console → DynamoDB
+2. Create table `radml-chat-history`
+3. Use:
+   - Partition key: `user_id` (String)
+   - Sort key: `job_id` (String)
+4. Set in `config.yaml`:
    ```yaml
-   mongodb:
-     uri: "mongodb+srv://user:pass@cluster.mongodb.net/"
+   nosql:
+     provider: "dynamodb"
+     region: "us-east-1"
+     table_name: "radml-chat-history"
    ```
 
 ---
@@ -170,4 +167,4 @@ This shows a full health check of every API, credential, and package.
 | `LLM not initialised` | Set `llm.gemini_api_key` in `config.yaml` |
 | `Kaggle auth failed` | Regenerate token at kaggle.com/settings/account |
 | `Pipeline failed: Dataset CSV not found` | Data collection stage failed — check Kaggle credentials |
-| `pymongo not installed` | Normal warning — history stored in-memory. Run `pip install pymongo` for persistence. |
+| `NoSQL history unavailable` | Check AWS credentials and create the DynamoDB table configured in `nosql.table_name`. |

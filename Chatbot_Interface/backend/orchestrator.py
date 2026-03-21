@@ -1,7 +1,7 @@
 """
 Chatbot_Interface/backend/orchestrator.py
 ==========================================
-Job lifecycle manager — now user-aware for MongoDB history sync.
+Job lifecycle manager — now user-aware for persisted history sync.
 """
 from __future__ import annotations
 import importlib.util
@@ -112,7 +112,7 @@ class Orchestrator:
             entry = {"step": step, "message": msg, "ts": time.time()}
             job.logs.append(entry)
             logger.info("[job=%s][%s] %s", job.id, step, msg)
-            # Sync logs to MongoDB every 5 entries to avoid hammering the DB
+            # Sync logs to the history store every 5 entries to avoid extra writes
             if history_db and len(job.logs) % 5 == 0:
                 try:
                     history_db.upsert_job(
@@ -186,6 +186,7 @@ class Orchestrator:
                 "endpoint_name": cg_result.get("endpoint_name"),
                 "app_path":      cg_result.get("app_path"),
                 "sm_meta":       cg_result.get("sm_meta", {}),
+                "training_data": cg_result.get("training_data", {}),
                 "dataset": {
                     "s3_uri":       db_results["dataset"].get("s3_uri"),
                     "row_count":    db_results["dataset"]["row_count"],
@@ -215,7 +216,7 @@ class Orchestrator:
             job.logs.append({"step": "error", "message": str(exc), "ts": time.time()})
 
         finally:
-            # Final sync to MongoDB
+            # Final sync to the history store
             if history_db:
                 try:
                     history_db.upsert_job(
@@ -224,4 +225,4 @@ class Orchestrator:
                         logs=job.logs, result=job.result, error=job.error,
                     )
                 except Exception as e:
-                    logger.warning("Failed to sync job to MongoDB: %s", e)
+                    logger.warning("Failed to sync job to history storage: %s", e)

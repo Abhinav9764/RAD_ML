@@ -1,178 +1,245 @@
 """
 backend/chat_history_db.py
 ===========================
-MongoDB chat history store.
+DynamoDB-backed chat history store with an in-memory fallback.
 
-Each document in the 'chat_history' collection represents one pipeline job
-belonging to a user:
+Each job record is keyed by:
+- user_id (partition key)
+- job_id  (sort key)
 
-{
-  "_id":       ObjectId,
-  "user_id":   int,                  # FK → SQLite users.id
-  "job_id":    str,                  # RAD-ML pipeline job id
-  "prompt":    str,
-  "status":    "running"|"done"|"error",
-  "logs":      [{ step, message, ts }],
-  "result":    { deploy_url, dataset, model, ... } | {},
-  "error":     str,
-  "created_at": datetime,
-  "updated_at": datetime,
-}
-
-Falls back to in-memory dict store when MongoDB is unreachable,
-so the app always works even without MongoDB configured.
+This keeps the backend on a single AWS-friendly NoSQL stack instead of
+depending on a separate MongoDB service.
 """
 from __future__ import annotations
+
 import logging
-import time
 from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Try to import pymongo; fall back to in-memory
 try:
-    from pymongo import MongoClient, DESCENDING
-    from pymongo.errors import ConnectionFailure
-    _MONGO_AVAILABLE = True
-except ImportError:
-    _MONGO_AVAILABLE = False
+    import boto3
+    from boto3.dynamodb.conditions import Key
+    from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
+
+    _BOTO3_AVAILABLE = True
+except ImportError:  # pragma: no cover - environment-specific
+    boto3 = None  # type: ignore[assignment]
+    Key = None  # type: ignore[assignment]
+    BotoCoreError = ClientError = NoCredentialsError = Exception  # type: ignore[misc,assignment]
+    _BOTO3_AVAILABLE = False
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ── In-memory fallback ────────────────────────────────────────────────────────
+def _iso_now() -> str:
+    return _utcnow().isoformat()
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return int(value) if value == int(value) else float(value)
+    return value
+
+
 class _MemoryStore:
-    """Simple in-memory fallback when MongoDB is unavailable."""
+    """Simple in-memory fallback when DynamoDB is unavailable."""
+
     def __init__(self):
-        self._docs: dict[str, dict] = {}   # job_id → doc
+        self._docs: dict[tuple[str, str], dict[str, Any]] = {}
 
     def upsert_job(self, user_id: int, job_id: str, **fields) -> None:
-        doc = self._docs.get(job_id, {
-            "user_id": user_id, "job_id": job_id,
-            "created_at": _utcnow(),
-        })
-        doc.update(fields)
-        doc["updated_at"] = _utcnow()
-        self._docs[job_id] = doc
+        key = (str(user_id), job_id)
+        doc = self._docs.get(
+            key,
+            {
+                "user_id": str(user_id),
+                "job_id": job_id,
+                "created_at": _iso_now(),
+                "updated_at_epoch": 0,
+            },
+        )
+        doc.update(_json_safe(fields))
+        doc["updated_at"] = _iso_now()
+        doc["updated_at_epoch"] = int(_utcnow().timestamp())
+        self._docs[key] = doc
 
-    def get_history(self, user_id: int, limit: int = 50) -> list[dict]:
-        docs = [d for d in self._docs.values() if d["user_id"] == user_id]
-        docs.sort(key=lambda d: d.get("created_at", datetime.min), reverse=True)
-        return [self._clean(d) for d in docs[:limit]]
+    def get_history(self, user_id: int, limit: int = 50) -> list[dict[str, Any]]:
+        docs = [d for d in self._docs.values() if d["user_id"] == str(user_id)]
+        docs.sort(key=lambda d: d.get("updated_at_epoch", 0), reverse=True)
+        return [dict(d) for d in docs[:limit]]
+
+    def get_job(self, user_id: int, job_id: str) -> dict[str, Any] | None:
+        doc = self._docs.get((str(user_id), job_id))
+        return dict(doc) if doc else None
 
     def delete_job(self, user_id: int, job_id: str) -> bool:
-        doc = self._docs.get(job_id)
-        if doc and doc["user_id"] == user_id:
-            del self._docs[job_id]
-            return True
-        return False
-
-    def get_job(self, user_id: int, job_id: str) -> dict | None:
-        doc = self._docs.get(job_id)
-        if doc and doc["user_id"] == user_id:
-            return self._clean(doc)
-        return None
+        return self._docs.pop((str(user_id), job_id), None) is not None
 
     def delete_all(self, user_id: int) -> int:
-        to_del = [jid for jid, d in self._docs.items()
-                  if d["user_id"] == user_id]
-        for jid in to_del:
-            del self._docs[jid]
-        return len(to_del)
-
-    @staticmethod
-    def _clean(doc: dict) -> dict:
-        d = {k: v for k, v in doc.items() if k != "_id"}
-        # Serialize datetimes
-        for k in ("created_at", "updated_at"):
-            if isinstance(d.get(k), datetime):
-                d[k] = d[k].isoformat()
-        return d
+        keys = [key for key in self._docs if key[0] == str(user_id)]
+        for key in keys:
+            del self._docs[key]
+        return len(keys)
 
 
-# ── MongoDB store ─────────────────────────────────────────────────────────────
 class ChatHistoryDB:
-    """MongoDB-backed chat history with automatic in-memory fallback."""
+    """DynamoDB-backed chat history with automatic in-memory fallback."""
 
     def __init__(self, config: dict):
-        mongo_cfg = config.get("mongodb", {})
-        self._uri        = mongo_cfg.get("uri", "mongodb://localhost:27017")
-        self._db_name    = mongo_cfg.get("db_name", "radml")
-        self._coll_name  = mongo_cfg.get("collection", "chat_history")
-        self._coll       = None
-        self._fallback   = _MemoryStore()
-        self._use_mongo  = False
+        nosql_cfg = config.get("nosql", {})
+        aws_cfg = config.get("aws", {})
+        self._provider = str(nosql_cfg.get("provider", "dynamodb")).lower()
+        self._region = nosql_cfg.get("region") or aws_cfg.get("region", "us-east-1")
+        self._table_name = nosql_cfg.get("table_name", "radml-chat-history")
+        self._endpoint_url = nosql_cfg.get("endpoint_url") or None
+        self._auto_create = bool(nosql_cfg.get("auto_create_table", True))
+        self._access_key = aws_cfg.get("access_key_id", "")
+        self._secret_key = aws_cfg.get("secret_access_key", "")
+        self._table = None
+        self._fallback = _MemoryStore()
+        self._use_nosql = False
         self._connect()
 
+    def _resource(self):
+        if not _BOTO3_AVAILABLE:
+            raise RuntimeError("boto3 is not installed")
+        kwargs: dict[str, Any] = {"region_name": self._region}
+        if self._endpoint_url:
+            kwargs["endpoint_url"] = self._endpoint_url
+        if self._access_key and self._secret_key:
+            kwargs["aws_access_key_id"] = self._access_key
+            kwargs["aws_secret_access_key"] = self._secret_key
+        return boto3.resource("dynamodb", **kwargs)
+
     def _connect(self) -> None:
-        if not _MONGO_AVAILABLE:
-            logger.warning("pymongo not installed — using in-memory history store.")
-            return
-        try:
-            client = MongoClient(self._uri, serverSelectionTimeoutMS=3000)
-            client.admin.command("ping")
-            db = client[self._db_name]
-            self._coll = db[self._coll_name]
-            # Ensure indexes
-            self._coll.create_index([("user_id", 1), ("updated_at", -1)])
-            self._coll.create_index("job_id", unique=True)
-            self._use_mongo = True
-            logger.info("MongoDB connected: %s/%s", self._db_name, self._coll_name)
-        except Exception as exc:
+        if self._provider != "dynamodb":
             logger.warning(
-                "MongoDB unreachable (%s) — using in-memory history store. "
-                "Start MongoDB or set mongodb.uri in config.yaml.", exc
+                "Unsupported nosql.provider '%s' - using in-memory history store.",
+                self._provider,
             )
-
-    # ── public API ────────────────────────────────────────────────────────────
-    def upsert_job(self, user_id: int, job_id: str, **fields) -> None:
-        """Create or update a job document."""
-        if not self._use_mongo:
-            self._fallback.upsert_job(user_id, job_id, **fields)
             return
-        self._coll.update_one(
-            {"job_id": job_id},
-            {"$set":    {**fields, "user_id": user_id, "updated_at": _utcnow()},
-             "$setOnInsert": {"job_id": job_id, "created_at": _utcnow()}},
-            upsert=True,
-        )
+        if not _BOTO3_AVAILABLE:
+            logger.warning("boto3 not installed - using in-memory history store.")
+            return
 
-    def get_history(self, user_id: int, limit: int = 50) -> list[dict]:
-        """Return most recent jobs for this user (newest first)."""
-        if not self._use_mongo:
+        try:
+            resource = self._resource()
+            table = resource.Table(self._table_name)
+            table.load()
+            self._table = table
+            self._use_nosql = True
+            logger.info("DynamoDB connected: table=%s region=%s", self._table_name, self._region)
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException" and self._auto_create:
+                self._create_table()
+                return
+            logger.warning("DynamoDB unavailable (%s) - using in-memory history store.", exc)
+        except Exception as exc:
+            logger.warning("NoSQL history unavailable (%s) - using in-memory history store.", exc)
+
+    def _create_table(self) -> None:
+        try:
+            resource = self._resource()
+            table = resource.create_table(
+                TableName=self._table_name,
+                KeySchema=[
+                    {"AttributeName": "user_id", "KeyType": "HASH"},
+                    {"AttributeName": "job_id", "KeyType": "RANGE"},
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "user_id", "AttributeType": "S"},
+                    {"AttributeName": "job_id", "AttributeType": "S"},
+                ],
+                BillingMode="PAY_PER_REQUEST",
+            )
+            table.wait_until_exists()
+            self._table = resource.Table(self._table_name)
+            self._use_nosql = True
+            logger.info("Created DynamoDB table: %s", self._table_name)
+        except Exception as exc:
+            logger.warning("Failed to create DynamoDB table (%s) - using in-memory history store.", exc)
+
+    def upsert_job(self, user_id: int, job_id: str, **fields) -> None:
+        payload = _json_safe(fields)
+        if not self._use_nosql:
+            self._fallback.upsert_job(user_id, job_id, **payload)
+            return
+
+        existing = self.get_job(user_id, job_id) or {}
+        item = {
+            **existing,
+            **payload,
+            "user_id": str(user_id),
+            "job_id": job_id,
+            "created_at": existing.get("created_at", _iso_now()),
+            "updated_at": _iso_now(),
+            "updated_at_epoch": int(_utcnow().timestamp()),
+        }
+        self._table.put_item(Item=item)
+
+    def get_history(self, user_id: int, limit: int = 50) -> list[dict[str, Any]]:
+        if not self._use_nosql:
             return self._fallback.get_history(user_id, limit)
-        cursor = (
-            self._coll
-            .find({"user_id": user_id},
-                  {"_id": 0, "logs": 0})   # exclude heavy logs from list view
-            .sort("updated_at", DESCENDING)
-            .limit(limit)
-        )
-        return list(cursor)
 
-    def get_job(self, user_id: int, job_id: str) -> dict | None:
-        """Return the full document for a single job."""
-        if not self._use_mongo:
+        try:
+            response = self._table.query(
+                KeyConditionExpression=Key("user_id").eq(str(user_id)),
+            )
+            items = response.get("Items", [])
+            items = [_json_safe({k: v for k, v in item.items() if k != "logs"}) for item in items]
+            items.sort(key=lambda item: item.get("updated_at_epoch", 0), reverse=True)
+            return items[:limit]
+        except Exception as exc:
+            logger.warning("DynamoDB history query failed (%s) - falling back to memory.", exc)
+            return self._fallback.get_history(user_id, limit)
+
+    def get_job(self, user_id: int, job_id: str) -> dict[str, Any] | None:
+        if not self._use_nosql:
             return self._fallback.get_job(user_id, job_id)
-        doc = self._coll.find_one(
-            {"job_id": job_id, "user_id": user_id}, {"_id": 0}
-        )
-        return doc
+
+        try:
+            response = self._table.get_item(Key={"user_id": str(user_id), "job_id": job_id})
+            item = response.get("Item")
+            return _json_safe(item) if item else None
+        except Exception as exc:
+            logger.warning("DynamoDB get_job failed (%s) - falling back to memory.", exc)
+            return self._fallback.get_job(user_id, job_id)
 
     def delete_job(self, user_id: int, job_id: str) -> bool:
-        """Delete one job. Returns True if a document was deleted."""
-        if not self._use_mongo:
+        if not self._use_nosql:
             return self._fallback.delete_job(user_id, job_id)
-        result = self._coll.delete_one(
-            {"job_id": job_id, "user_id": user_id}
-        )
-        return result.deleted_count > 0
+
+        try:
+            self._table.delete_item(Key={"user_id": str(user_id), "job_id": job_id})
+            return True
+        except Exception as exc:
+            logger.warning("DynamoDB delete_job failed (%s) - falling back to memory.", exc)
+            return self._fallback.delete_job(user_id, job_id)
 
     def delete_all(self, user_id: int) -> int:
-        """Delete all history for a user. Returns count deleted."""
-        if not self._use_mongo:
+        if not self._use_nosql:
             return self._fallback.delete_all(user_id)
-        result = self._coll.delete_many({"user_id": user_id})
-        return result.deleted_count
+
+        try:
+            items = self.get_history(user_id, limit=1000)
+            if not items:
+                return 0
+            with self._table.batch_writer() as batch:
+                for item in items:
+                    batch.delete_item(Key={"user_id": str(user_id), "job_id": item["job_id"]})
+            return len(items)
+        except Exception as exc:
+            logger.warning("DynamoDB delete_all failed (%s) - falling back to memory.", exc)
+            return self._fallback.delete_all(user_id)

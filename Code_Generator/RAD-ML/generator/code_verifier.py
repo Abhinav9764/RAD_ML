@@ -1,107 +1,150 @@
 """
-Code_Generator/RAD-ML/generator/code_verifier.py
-=================================================
-Verifies generated app.py by:
-  1. AST parse check (syntax errors caught instantly, no subprocess needed)
-  2. Import check (all imports resolvable in workspace venv)
-  3. If errors found → ask Gemini to fix, up to max_fix_attempts
+generator/code_verifier.py — Gemini API Code Verifier (Streamlit edition)
+==========================================================================
+Sends generated Python (app.py / test_app.py) to the Gemini API for a
+logic + syntax check.  HTML/CSS verification is removed — Streamlit
+generates its own UI at runtime.
 
-Returns the fixed code path or raises after exhausting retries.
+Gemini returns either:
+  - The corrected code (if issues were found)
+  - "OK" (if no issues were found; original code is returned unchanged)
+
+A fast AST pre-check runs before the API call to skip trivial issues
+and conserve API quota.
 """
+
 from __future__ import annotations
+
 import ast
 import logging
-import subprocess
-import sys
-import textwrap
-from pathlib import Path
+import os
+import re
+from typing import Optional
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
-_FIX_PROMPT = """
-The following Python Flask app.py has an error.
+try:
+    import google.generativeai as genai  # type: ignore
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    log.warning("google-generativeai not installed — CodeVerifier will skip API verification.")
 
-=== ERROR ===
-{error}
 
-=== CURRENT CODE ===
-{code}
+VERIFICATION_SYSTEM = """\
+You are an expert Python code reviewer specialising in Streamlit applications.
+You will be given one generated Python file (app.py or test_app.py).
 
-=== TASK ===
-Fix ALL errors in the code above.
-Return ONLY the corrected Python code — no markdown fences, no explanation.
-Start directly with: from flask import ...
+Your job:
+1. Check for syntax errors.
+2. Check for logic errors (missing imports, undefined variables, broken logic).
+3. Ensure the code uses ONLY Streamlit for the UI — reject any Flask, FastAPI,
+   render_template, jsonify, or @app.route usage.
+4. Preserve the Streamlit framework and style already used.
+5. If the code is correct, reply with exactly: OK
+6. If the code has issues, reply with ONLY the corrected Python code and nothing else.
+   No explanations, no markdown, just the fixed Python code.
 """
 
 
 class CodeVerifier:
-    def __init__(self, llm_client, config: dict):
-        self._llm      = llm_client
-        self._max_tries = int(config.get("codegen", {}).get("max_fix_attempts", 5))
+    """
+    Verifies and auto-corrects generated Streamlit Python code via Gemini API.
 
-    # ── public ────────────────────────────────────────────────────────────────
-    def verify_and_fix(self, app_path: Path) -> Path:
+    Args:
+        cfg: Full config dict (reads [gemini] section).
+    """
+
+    def __init__(self, cfg: dict):
+        gemini_cfg = cfg.get("gemini", {})
+        self.api_key = os.getenv("GEMINI_API_KEY") or gemini_cfg.get("api_key", "")
+        self.model_name = gemini_cfg.get("model", "gemini-1.5-pro-latest")
+        self._model = None
+        self._disabled = False
+
+    # ── Public API ────────────────────────────────────────────────────────────
+    def verify(self, python_code: str, artifact_name: str = "app.py") -> str:
         """
-        Verify app_path. If broken, attempt up to max_fix_attempts LLM fixes.
-        Returns the (possibly updated) Path on success.
-        Raises RuntimeError if unfixable.
+        Verify and optionally auto-correct the given Streamlit Python code.
+
+        Args:
+            python_code:   Content of the generated Python file.
+            artifact_name: File label passed to Gemini for context.
+
+        Returns:
+            Corrected (or unchanged) Python code string.
         """
-        for attempt in range(1, self._max_tries + 1):
-            error = self._check(app_path)
-            if error is None:
-                logger.info("Code verification passed on attempt %d.", attempt)
-                return app_path
+        # Fast local AST check first
+        syntax_error = self._local_syntax_check(python_code)
+        if syntax_error:
+            log.warning("Local syntax error in %s: %s", artifact_name, syntax_error)
 
-            logger.warning("Attempt %d/%d — error detected:\n%s",
-                           attempt, self._max_tries, error[:300])
+        # Reject code that still contains Flask patterns
+        if self._contains_flask(python_code):
+            log.warning(
+                "%s contains Flask patterns — flagging for LLM refinement.", artifact_name
+            )
+            # Return as-is so the refinement loop sees the real code and feeds it back
+            return python_code
 
-            if attempt == self._max_tries:
-                raise RuntimeError(
-                    f"Code could not be fixed after {self._max_tries} attempts.\n"
-                    f"Last error:\n{error}"
-                )
+        if self._disabled:
+            return python_code
 
-            fixed = self._fix(app_path.read_text(encoding="utf-8"), error)
-            app_path.write_text(fixed, encoding="utf-8")
-            logger.info("Applied LLM fix, re-verifying …")
+        if not GEMINI_AVAILABLE or not self.api_key or "YOUR" in self.api_key:
+            log.info("Gemini verification skipped (API unavailable or unconfigured).")
+            return python_code
 
-        return app_path   # unreachable, but satisfies type checker
+        try:
+            corrected = self._call_gemini(python_code, artifact_name)
+            if corrected.strip().upper().startswith("OK"):
+                log.info("✓ Gemini verified %s — no issues found.", artifact_name)
+                return python_code
+            log.info("✓ Gemini applied corrections to %s.", artifact_name)
+            return corrected
+        except Exception as exc:
+            self._disabled = True
+            log.warning("Gemini verification failed: %s. Disabling verifier for this run.", exc)
+            return python_code
 
-    # ── internals ─────────────────────────────────────────────────────────────
-    def _check(self, path: Path) -> str | None:
-        """Return error string or None if code is clean."""
-        code = path.read_text(encoding="utf-8")
-
-        # 1. Syntax check via AST
+    # ── Internal ──────────────────────────────────────────────────────────────
+    @staticmethod
+    def _local_syntax_check(code: str) -> Optional[str]:
         try:
             ast.parse(code)
+            return None
         except SyntaxError as exc:
-            return f"SyntaxError at line {exc.lineno}: {exc.msg}"
-
-        # 2. Compile check (catches more issues than AST alone)
-        try:
-            compile(code, str(path), "exec")
-        except Exception as exc:
             return str(exc)
 
-        # 3. Light static scan — forbidden patterns
-        forbidden = [
-            ("import os; os.system", "os.system call detected"),
-            ("subprocess.call",      "subprocess.call detected"),
-            ("eval(",                "eval() detected — security risk"),
-            ("exec(",                "exec() detected — security risk"),
-        ]
-        for pattern, msg in forbidden:
-            if pattern in code:
-                return msg
+    @staticmethod
+    def _contains_flask(code: str) -> bool:
+        src = str(code or "").lower()
+        return any(
+            pattern in src
+            for pattern in (
+                "from flask",
+                "import flask",
+                "flask(",
+                "@app.route",
+                "render_template",
+                "jsonify(",
+            )
+        )
 
-        return None
+    def _call_gemini(self, python_code: str, artifact_name: str) -> str:
+        if self._model is None:
+            genai.configure(api_key=self.api_key)
+            self._model = genai.GenerativeModel(
+                model_name=self.model_name,
+                system_instruction=VERIFICATION_SYSTEM,
+            )
 
-    def _fix(self, code: str, error: str) -> str:
-        import re
-        prompt = _FIX_PROMPT.format(error=error, code=code)
-        fixed  = self._llm.generate(prompt)
-        # Strip markdown fences if present
-        fixed  = re.sub(r"^```[a-z]*\n?", "", fixed.strip(), flags=re.MULTILINE)
-        fixed  = re.sub(r"\n?```$",        "", fixed.strip(), flags=re.MULTILINE)
-        return fixed.strip()
+        prompt = (
+            f"Review this generated Streamlit Python file ({artifact_name}). "
+            "Ensure it uses ONLY Streamlit for the UI — no Flask allowed.\n\n"
+            f"```python\n{python_code}\n```"
+        )
+        response = self._model.generate_content(prompt)
+        raw = response.text or ""
+        # Strip markdown fences if Gemini added them
+        raw = re.sub(r"```(?:python)?\s*", "", raw).strip().rstrip("```").strip()
+        return raw

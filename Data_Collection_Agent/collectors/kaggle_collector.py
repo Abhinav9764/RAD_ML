@@ -22,8 +22,8 @@ class KaggleCollector:
     def __init__(self, config: dict):
         kg = config.get("kaggle", {})
         col = config.get("collection", {})
-        self._username = kg.get("username", "").strip()
-        self._key = kg.get("key", "").strip()
+        self._username = (os.getenv("KAGGLE_USERNAME") or kg.get("username", "")).strip()
+        self._key = (os.getenv("KAGGLE_KEY") or kg.get("key", "")).strip()
         if self._username:
             os.environ["KAGGLE_USERNAME"] = self._username
         if self._key:

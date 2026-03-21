@@ -2,32 +2,32 @@
 
 :root {
   /* Core palette */
-  --bg:          #080810;
-  --bg2:         #0d0d1a;
-  --surface:     #10101e;
-  --surface2:    #14142a;
-  --card:        #18182e;
-  --border:      #252540;
-  --border2:     #32325a;
+  --bg:          #0d1416;
+  --bg2:         #152124;
+  --surface:     #172629;
+  --surface2:    #1d3034;
+  --card:        #21383d;
+  --border:      #315056;
+  --border2:     #487279;
 
   /* Accent */
-  --violet:      #7c6dfa;
-  --violet-dim:  rgba(124,109,250,0.12);
-  --violet-glow: rgba(124,109,250,0.35);
-  --cyan:        #00e8c8;
-  --cyan-dim:    rgba(0,232,200,0.10);
-  --pink:        #f065ad;
-  --amber:       #ffb54a;
+  --violet:      #e07a34;
+  --violet-dim:  rgba(224,122,52,0.12);
+  --violet-glow: rgba(224,122,52,0.30);
+  --cyan:        #51c7b0;
+  --cyan-dim:    rgba(81,199,176,0.12);
+  --pink:        #f2a65a;
+  --amber:       #f4c95d;
 
   /* Text */
-  --text:        #e4e4f0;
-  --text2:       #9494bb;
-  --text3:       #5a5a80;
+  --text:        #edf2ee;
+  --text2:       #b9c8c1;
+  --text3:       #7f9890;
 
   /* Status */
-  --success:     #00e8c8;
-  --warning:     #ffb54a;
-  --error:       #ff5070;
+  --success:     #51c7b0;
+  --warning:     #f4c95d;
+  --error:       #ff6b6b;
 
   /* Typography */
   --font-display: 'Syne', sans-serif;
@@ -43,7 +43,10 @@
 html { height: 100%; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(224,122,52,0.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(81,199,176,0.10), transparent 28%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
   color: var(--text);
   font-family: var(--font-body);
   font-size: 14px;

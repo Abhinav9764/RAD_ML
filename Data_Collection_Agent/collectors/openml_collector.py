@@ -10,6 +10,7 @@ ROOT CAUSE FIX:
 """
 from __future__ import annotations
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -24,21 +25,23 @@ class OpenMLCollector:
         self._raw_dir  = Path(col.get("raw_data_dir", "data/raw"))
         self._raw_dir.mkdir(parents=True, exist_ok=True)
         self._enabled  = openml_cfg.get("enabled", True)
+        self._api_key = str(os.getenv("OPENML_API_KEY") or openml_cfg.get("api_key", "")).strip()
+        self._configured = False
 
-        api_key = openml_cfg.get("api_key", "")
-        if api_key and not api_key.startswith("YOUR_"):
-            try:
-                import openml as _oml
-                _oml.config.apikey = api_key
-            except ImportError:
-                pass
+    def _load_openml(self):
+        import openml
+
+        if not self._configured and self._api_key and not self._api_key.startswith("YOUR_"):
+            openml.config.apikey = self._api_key
+        self._configured = True
+        return openml
 
     # ── public ──────────────────────────────────────────────────────────────
     def search(self, query: str, spec: dict | None = None) -> list[dict]:
         if not self._enabled:
             return []
         try:
-            import openml
+            openml = self._load_openml()
         except ImportError:
             logger.warning("openml not installed: pip install openml")
             return []
@@ -123,7 +126,7 @@ class OpenMLCollector:
 
     def download(self, dataset_id: str) -> list[Path]:
         try:
-            import openml
+            openml = self._load_openml()
         except ImportError:
             return []
 

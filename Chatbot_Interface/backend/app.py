@@ -43,6 +43,7 @@ from flask_jwt_extended import (
     jwt_required, get_jwt_identity,
     set_access_cookies, unset_jwt_cookies,
 )
+from werkzeug.exceptions import HTTPException
 
 # ── Path setup ─────────────────────────────────────────────────────────────────
 _HERE         = Path(__file__).resolve().parent
@@ -61,7 +62,35 @@ def _load_config() -> dict:
     for candidate in (_PROJECT_ROOT / "config.yaml", _HERE / "config.yaml"):
         if candidate.exists():
             with open(candidate, encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
+                config = yaml.safe_load(f) or {}
+                auth_cfg = config.setdefault("auth", {})
+                aws_cfg = config.setdefault("aws", {})
+                gemini_cfg = config.setdefault("gemini", {})
+                kaggle_cfg = config.setdefault("kaggle", {})
+                openml_cfg = config.setdefault("openml", {})
+                nosql_cfg = config.setdefault("nosql", {})
+
+                auth_cfg["jwt_secret_key"] = os.getenv("JWT_SECRET_KEY", auth_cfg.get("jwt_secret_key", ""))
+                auth_cfg["google_client_id"] = os.getenv("GOOGLE_CLIENT_ID", auth_cfg.get("google_client_id", ""))
+                auth_cfg["google_client_secret"] = os.getenv("GOOGLE_CLIENT_SECRET", auth_cfg.get("google_client_secret", ""))
+
+                aws_cfg["access_key_id"] = os.getenv("AWS_ACCESS_KEY_ID", aws_cfg.get("access_key_id", ""))
+                aws_cfg["secret_access_key"] = os.getenv("AWS_SECRET_ACCESS_KEY", aws_cfg.get("secret_access_key", ""))
+                aws_cfg["region"] = os.getenv("AWS_REGION", aws_cfg.get("region", "us-east-1"))
+                aws_cfg["s3_bucket"] = os.getenv("AWS_S3_BUCKET", aws_cfg.get("s3_bucket", ""))
+                aws_cfg["s3_prefix"] = os.getenv("AWS_S3_PREFIX", aws_cfg.get("s3_prefix", "collected_data"))
+                aws_cfg["sagemaker_role"] = os.getenv("AWS_SAGEMAKER_ROLE", aws_cfg.get("sagemaker_role", ""))
+
+                gemini_cfg["api_key"] = os.getenv("GEMINI_API_KEY", gemini_cfg.get("api_key", ""))
+                kaggle_cfg["username"] = os.getenv("KAGGLE_USERNAME", kaggle_cfg.get("username", ""))
+                kaggle_cfg["key"] = os.getenv("KAGGLE_KEY", kaggle_cfg.get("key", ""))
+                openml_cfg["api_key"] = os.getenv("OPENML_API_KEY", openml_cfg.get("api_key", ""))
+
+                nosql_cfg["provider"] = os.getenv("NOSQL_PROVIDER", nosql_cfg.get("provider", "dynamodb"))
+                nosql_cfg["region"] = os.getenv("NOSQL_REGION", nosql_cfg.get("region", aws_cfg["region"]))
+                nosql_cfg["table_name"] = os.getenv("NOSQL_TABLE_NAME", nosql_cfg.get("table_name", "radml-chat-history"))
+                nosql_cfg["endpoint_url"] = os.getenv("NOSQL_ENDPOINT_URL", nosql_cfg.get("endpoint_url", ""))
+                return config
     return {}
 
 
@@ -116,6 +145,21 @@ def invalid(_err):
     return jsonify({"error": "Invalid token"}), 422
 
 
+@app.errorhandler(Exception)
+def handle_api_error(exc):
+    if not request.path.startswith("/api/"):
+        if isinstance(exc, HTTPException):
+            return exc
+        logger.exception("Unhandled non-API error: %s", exc)
+        return jsonify({"error": "Internal server error"}), 500
+
+    if isinstance(exc, HTTPException):
+        return jsonify({"ok": False, "error": exc.description}), exc.code
+
+    logger.exception("Unhandled API error on %s: %s", request.path, exc)
+    return jsonify({"ok": False, "error": "Internal server error"}), 500
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # AUTH ROUTES
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -143,6 +187,9 @@ def register():
         return resp, 201
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("Registration failed for %s: %s", username, exc)
+        return jsonify({"ok": False, "error": "Registration failed"}), 500
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -152,23 +199,27 @@ def login():
     password = str(data.get("password", ""))
     if not username or not password:
         return jsonify({"ok": False, "error": "Username and password are required"}), 400
-    user = _auth_db.login(username, password)
-    if not user:
-        return jsonify({"ok": False, "error": "Invalid username or password"}), 401
-    token = create_access_token(
-        identity=str(user["id"]),
-        expires_delta=_JWT_EXPIRES,
-    )
-    resp = jsonify({
-        "ok": True,
-        "token": token,
-        "user": {"id": user["id"], "username": user["username"],
-                 "email": user.get("email",""),
-                 "avatar_url": user.get("avatar_url","")},
-    })
-    set_access_cookies(resp, token)
-    logger.info("Login: %s", username)
-    return resp
+    try:
+        user = _auth_db.login(username, password)
+        if not user:
+            return jsonify({"ok": False, "error": "Invalid username or password"}), 401
+        token = create_access_token(
+            identity=str(user["id"]),
+            expires_delta=_JWT_EXPIRES,
+        )
+        resp = jsonify({
+            "ok": True,
+            "token": token,
+            "user": {"id": user["id"], "username": user["username"],
+                     "email": user.get("email",""),
+                     "avatar_url": user.get("avatar_url","")},
+        })
+        set_access_cookies(resp, token)
+        logger.info("Login: %s", username)
+        return resp
+    except Exception as exc:
+        logger.exception("Login failed for %s: %s", username, exc)
+        return jsonify({"ok": False, "error": "Login failed"}), 500
 
 
 @app.route("/api/auth/google", methods=["POST"])
@@ -249,7 +300,7 @@ def pipeline_status(job_id: str):
     user_id = int(get_jwt_identity())
     job     = _orc.get_job(job_id)
     if not job:
-        # Try MongoDB history
+        # Try persisted history storage
         doc = _history_db.get_job(user_id, job_id)
         if not doc:
             return jsonify({"error": "job not found"}), 404
@@ -416,7 +467,7 @@ def get_explanation(job_id: str):
         expl = job.result.get("explanation", {})
         if expl:
             return jsonify(expl)
-    # Fall back to MongoDB history
+    # Fall back to persisted history storage
     doc = _history_db.get_job(user_id, job_id)
     if not doc:
         return jsonify({"error": "job not found"}), 404
@@ -426,8 +477,11 @@ def get_explanation(job_id: str):
 # ── Health ─────────────────────────────────────────────────────────────────────
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "service": "RAD-ML",
-                    "mongo": _history_db._use_mongo})
+    return jsonify({
+        "status": "ok",
+        "service": "RAD-ML",
+        "history_backend": "dynamodb" if getattr(_history_db, "_use_nosql", False) else "memory",
+    })
 
 
 

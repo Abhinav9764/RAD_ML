@@ -1,49 +1,53 @@
 """
 utils/s3_uploader.py
 =====================
-Uploads the final dataset CSV to S3.
-Gracefully disabled when boto3 / credentials are absent.
+Uploads collected datasets and metadata to S3.
+Gracefully disables itself when boto3 or credentials are unavailable.
 """
 from __future__ import annotations
+
 import json
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 try:
     import boto3
+
     _BOTO3 = True
-except ImportError:
+except ImportError:  # pragma: no cover - environment-specific
     _BOTO3 = False
 
 
 class S3Uploader:
     def __init__(self, config: dict):
         aws = config.get("aws", {})
-        self._bucket  = aws.get("s3_bucket", "rad-ml-datasets")
-        self._prefix  = aws.get("s3_prefix", "collected_data")
-        self._region  = aws.get("region", "us-east-1")
-        self._client  = None
+        self._bucket = os.getenv("AWS_S3_BUCKET") or aws.get("s3_bucket", "rad-ml-datasets")
+        self._prefix = os.getenv("AWS_S3_PREFIX") or aws.get("s3_prefix", "collected_data")
+        self._region = os.getenv("AWS_REGION") or aws.get("region", "us-east-1")
+        self._client = None
         self._enabled = _BOTO3
 
         if self._enabled:
             try:
-                kw: dict = {"region_name": self._region}
-                if aws.get("access_key_id"):
-                    kw["aws_access_key_id"]     = aws["access_key_id"]
-                    kw["aws_secret_access_key"] = aws["secret_access_key"]
-                self._client = boto3.client("s3", **kw)
-                logger.info("S3Uploader ready — bucket: %s", self._bucket)
+                kwargs: dict = {"region_name": self._region}
+                access_key = os.getenv("AWS_ACCESS_KEY_ID") or aws.get("access_key_id")
+                secret_key = os.getenv("AWS_SECRET_ACCESS_KEY") or aws.get("secret_access_key")
+                if access_key:
+                    kwargs["aws_access_key_id"] = access_key
+                    kwargs["aws_secret_access_key"] = secret_key
+                self._client = boto3.client("s3", **kwargs)
+                logger.info("S3Uploader ready - bucket=%s prefix=%s", self._bucket, self._prefix)
             except Exception as exc:
-                logger.warning("S3 init failed (%s) — uploads disabled.", exc)
+                logger.warning("S3 init failed (%s) - uploads disabled.", exc)
                 self._enabled = False
 
-    # ── public ────────────────────────────────────────────────────────────────
     def upload_dataset(self, local_path: Path, job_id: str) -> str | None:
-        """Upload the final CSV and return its s3:// URI, or None if disabled."""
+        """Upload the collected dataset CSV and return its s3:// URI."""
         if not self._enabled:
-            logger.info("S3 disabled — dataset not uploaded.")
+            logger.info("S3 disabled - dataset not uploaded.")
             return None
         key = f"{self._prefix}/datasets/{job_id}/{local_path.name}"
         return self._upload(local_path, key)
@@ -54,12 +58,13 @@ class S3Uploader:
         key = f"{self._prefix}/{job_id}/db_results.json"
         try:
             self._client.put_object(
-                Bucket=self._bucket, Key=key,
-                Body=json.dumps(payload, indent=2, default=str).encode(),
+                Bucket=self._bucket,
+                Key=key,
+                Body=json.dumps(payload, indent=2, default=str).encode("utf-8"),
                 ContentType="application/json",
             )
             uri = f"s3://{self._bucket}/{key}"
-            logger.info("Uploaded results JSON → %s", uri)
+            logger.info("Uploaded results JSON -> %s", uri)
             return uri
         except Exception as exc:
             logger.error("JSON upload failed: %s", exc)
@@ -69,7 +74,7 @@ class S3Uploader:
         try:
             self._client.upload_file(str(path), self._bucket, key)
             uri = f"s3://{self._bucket}/{key}"
-            logger.info("Uploaded %s → %s", path.name, uri)
+            logger.info("Uploaded %s -> %s", path.name, uri)
             return uri
         except Exception as exc:
             logger.error("Upload failed for %s: %s", path, exc)

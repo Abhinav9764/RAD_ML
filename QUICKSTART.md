@@ -4,10 +4,10 @@
 
 RAD-ML is a complete machine learning pipeline that:
 1. Collects datasets intelligently
-2. Selects optimal algorithms
-3. Generates production-ready code
-4. Evaluates models (95% accuracy threshold)
-5. Automatically retrains with data augmentation
+2. Pushes collected data to S3
+3. Trains on SageMaker using the collected dataset derivatives
+4. Generates a live Streamlit app
+5. Stores chat history in DynamoDB-backed NoSQL storage
 6. Verifies deployment on localhost
 
 ---
@@ -75,17 +75,15 @@ Backend:
 
 ### 3. Model Evaluation
 ```
-If accuracy ≥ 95%:
+If quality gate is met:
   ✅ Deploy model
   ✅ Verify on localhost:5001
   ✅ Model ready for predictions
 
-If accuracy < 95%:
-  🔄 Apply SMOTE data augmentation
-  🔄 Increase dataset diversity
-  🔄 Retrain with best practices
+If the quality gate is missed:
+  🔄 Improve the dataset/features
+  🔄 Retrain from the collected data splits on SageMaker
   🔄 Re-evaluate
-  🔄 Repeat until ≥ 95%
 ```
 
 ### 4. Deployment
@@ -102,7 +100,7 @@ Model is deployed on localhost with:
 ## 📊 Key Parameters
 
 ### Accuracy Thresholds
-- **Minimum Accuracy**: 95%
+- **Minimum Accuracy**: project-specific quality gate
 - **Minimum Confidence**: 90% (CV mean - std)
 - **Cross-Validation**: 5-fold
 

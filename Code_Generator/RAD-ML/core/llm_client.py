@@ -6,18 +6,22 @@ Provides generate(prompt) → str  with retry + timeout.
 """
 from __future__ import annotations
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 logger = logging.getLogger(__name__)
 
 
 class LLMClient:
     def __init__(self, config: dict):
-        llm_cfg        = config.get("llm", {})
-        self._api_key  = llm_cfg.get("gemini_api_key", "")
-        self._model    = llm_cfg.get("gemini_model", "gemini-1.5-flash")
-        self._retries  = int(llm_cfg.get("max_retries", 3))
-        self._timeout  = int(llm_cfg.get("timeout_seconds", 90))
+        llm_cfg = config.get("llm", {}) or {}
+        gemini_cfg = config.get("gemini", {}) or {}
+        merged_cfg = {**gemini_cfg, **llm_cfg}
+        self._api_key = os.getenv("GEMINI_API_KEY") or merged_cfg.get("gemini_api_key") or merged_cfg.get("api_key", "")
+        self._model = merged_cfg.get("gemini_model") or merged_cfg.get("model", "gemini-2.0-flash")
+        self._retries = int(merged_cfg.get("max_retries", 2))
+        self._timeout = int(merged_cfg.get("timeout_seconds", 20))
         self._client   = None
         self._init()
 
@@ -41,14 +45,25 @@ class LLMClient:
         last_exc: Exception | None = None
         for attempt in range(1, self._retries + 1):
             try:
-                response = self._client.generate_content(
-                    prompt,
-                    generation_config={
-                        "temperature": 0.2,
-                        "max_output_tokens": 8192,
-                    },
-                )
+                def _call():
+                    return self._client.generate_content(
+                        prompt,
+                        generation_config={
+                            "temperature": 0.2,
+                            "max_output_tokens": 4096,
+                        },
+                    )
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_call)
+                    response = future.result(timeout=self._timeout)
                 return response.text
+            except FutureTimeoutError as exc:
+                last_exc = exc
+                logger.warning(
+                    "LLM attempt %d/%d timed out after %ss",
+                    attempt, self._retries, self._timeout,
+                )
             except Exception as exc:
                 last_exc = exc
                 wait = 2 ** attempt
