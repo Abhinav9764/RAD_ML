@@ -1,0 +1,50 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\sabhi\OneDrive\Desktop\RAD-ML-v8
+configfile: pytest.ini
+plugins: anyio-4.12.1, langsmith-0.7.9, cov-7.0.0
+collecting ... collected 10 items
+
+tests/test_huggingface_collector.py::test_search_returns_metadata PASSED [ 10%]
+tests/test_huggingface_collector.py::test_search_uses_filter_not_task_param PASSED [ 20%]
+tests/test_huggingface_collector.py::test_search_handles_import_error PASSED [ 30%]
+tests/test_huggingface_collector.py::test_search_handles_api_failure PASSED [ 40%]
+tests/test_huggingface_collector.py::test_search_disabled_returns_empty PASSED [ 50%]
+tests/test_huggingface_collector.py::test_search_respects_max_results PASSED [ 60%]
+tests/test_huggingface_collector.py::test_download_uses_cached_csv PASSED [ 70%]
+tests/test_huggingface_collector.py::test_download_enforces_min_row_threshold FAILED [ 80%]
+tests/test_huggingface_collector.py::test_download_saves_csv_and_returns_path FAILED [ 90%]
+tests/test_huggingface_collector.py::test_download_handles_missing_datasets_library PASSED [100%]
+
+================================== FAILURES ===================================
+__________________ test_download_enforces_min_row_threshold ___________________
+tests\test_huggingface_collector.py:184: in test_download_enforces_min_row_threshold
+    assert "only 5 rows" in col.last_error
+E   assert 'only 5 rows' in "HuggingFace download failed for 'user/tiny-dataset': "
+E    +  where "HuggingFace download failed for 'user/tiny-dataset': " = <collectors.huggingface_collector.HuggingFaceCollector object at 0x0000022972FB0250>.last_error
+------------------------------ Captured log call ------------------------------
+ERROR    collectors.huggingface_collector:huggingface_collector.py:239 HuggingFace download failed for 'user/tiny-dataset':
+__________________ test_download_saves_csv_and_returns_path ___________________
+tests\test_huggingface_collector.py:206: in test_download_saves_csv_and_returns_path
+    result_df = pd.read_csv(paths[0])
+                ^^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\site-packages\pandas\io\parsers\readers.py:1026: in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\site-packages\pandas\io\parsers\readers.py:620: in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\site-packages\pandas\io\parsers\readers.py:1620: in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\site-packages\pandas\io\parsers\readers.py:1880: in _make_engine
+    self.handles = get_handle(
+C:\Python314\Lib\site-packages\pandas\io\common.py:873: in get_handle
+    handle = open(
+E   FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\sabhi\\AppData\\Local\\Temp\\tmp26zaz1qx\\huggingface_user_big-dataset\\data.csv'
+=========================== short test summary info ===========================
+FAILED tests/test_huggingface_collector.py::test_download_enforces_min_row_threshold - assert 'only 5 rows' in "HuggingFace download failed for 'user/tiny-dataset': "
+ +  where "HuggingFace download failed for 'user/tiny-dataset': " = <collectors.huggingface_collector.HuggingFaceCollector object at 0x0000022972FB0250>.last_error
+FAILED tests/test_huggingface_collector.py::test_download_saves_csv_and_returns_path - FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\sabhi\\AppData\\Local\\Temp\\tmp26zaz1qx\\huggingface_user_big-dataset\\data.csv'
+========================= 2 failed, 8 passed in 4.59s =========================

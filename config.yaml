@@ -1,0 +1,87 @@
+# =============================================================================
+# RAD-ML  —  Root Configuration  (v6)
+# =============================================================================
+
+kaggle:
+  username: "Abhinava1234"
+  key:      "KGAT_d688479ccf2de04626d9e28ffb3d4dde"
+
+uci:
+  enabled:  true
+  base_url: "https://archive.ics.uci.edu/api/datasets"
+
+aws:
+  region:            "us-east-1"
+  s3_bucket:         "rad-ml-datasets"
+  s3_prefix:         "collected_data"
+  sagemaker_role:    "arn:aws:iam::820648834328:role/raduser"
+  access_key_id:     "AKIA36ET3OUMBNMEBGII"
+  secret_access_key: "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"
+
+llm:
+  gemini_api_key: "AIzaSyBdXJ0aeWWjq4E36gBw-z3O-gZvpCzRIpI"
+  gemini_model:   "gemini-2.0-flash"
+  max_retries:    3
+  timeout_seconds: 90
+
+collection:
+  max_kaggle_results: 10
+  max_uci_results:    10
+  max_openml_results: 8
+  max_hf_results:     8
+  min_row_threshold:  500
+  raw_data_dir:       "data/raw"
+  processed_data_dir: "data/processed"
+
+scoring:
+  keyword_match_weight:  0.40
+  row_count_weight:      0.30
+  column_match_weight:   0.20
+  recency_weight:        0.10
+
+codegen:
+  max_fix_attempts:      5
+  workspace_dir:         "Code_Generator/RAD-ML/workspace/current_app"
+  flask_port:            7000
+  test_timeout_seconds:  30
+
+sagemaker:
+  instance_type:         "ml.m5.large"
+  max_runtime_seconds:   3600
+  framework:             "xgboost"
+  framework_version:     "1.7-1"
+  output_path_prefix:    "models"
+
+storage:
+  db_path:      "data/rad_ml.db"
+  results_json: "Data_Collection_Agent/db_results.json"
+
+logging:
+  log_file:      "logs/rad_ml.log"
+  console_level: "INFO"
+  file_level:    "DEBUG"
+
+chatbot:
+  host:         "0.0.0.0"
+  port:         5001
+  debug:        false
+  cors_origins: ["http://localhost:5173", "http://localhost:3000"]
+
+openml:
+  api_key: "693b4c38add0102e61020e061705abf0"
+  enabled: true
+
+huggingface:
+  enabled: true
+
+auth:
+  sqlite_path:          "data/users.db"
+  jwt_secret_key:       "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_IN_PRODUCTION"
+  jwt_expires_hours:    24
+  google_client_id:     "844484455480-16hij80uqsdg2ob46fea6lpnhticjmbq.apps.googleusercontent.com"
+  google_client_secret: "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"
+
+mongodb:
+  uri:        "mongodb://localhost:27017"
+  db_name:    "radml"
+  collection: "chat_history"

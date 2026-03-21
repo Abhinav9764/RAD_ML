@@ -205,3 +205,48 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Data & generated files
+data/raw/
+data/processed/
+data/*.db
+data/*.json
+Data_Collection_Agent/db_results.json
+logs/
+*.log
+
+# Generated app workspace
+Code_Generator/RAD-ML/workspace/current_app/
+
+# Credentials – NEVER commit these
+.env
+config.local.yaml
+*_kaggle.json
+
+# Node
+Chatbot_Interface/frontend/node_modules/
+Chatbot_Interface/frontend/dist/
+
+# Coverage
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
