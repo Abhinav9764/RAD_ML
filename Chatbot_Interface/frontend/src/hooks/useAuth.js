@@ -3,6 +3,25 @@ import { useState, useCallback, useEffect, createContext, useContext } from 'rea
 const API = '/api'
 export const AuthContext = createContext(null)
 
+async function parseApiResponse(res, fallbackMessage) {
+  const text = await res.text()
+  let data = {}
+
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = { error: text }
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error || `${fallbackMessage} (${res.status})`)
+  }
+
+  return data
+}
+
 export function useAuthProvider() {
   const [user, setUser]       = useState(null)
   const [loading, setLoading] = useState(true)   // checking existing session
@@ -14,7 +33,7 @@ export function useAuthProvider() {
     fetch(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(r => parseApiResponse(r, 'Failed to restore session'))
       .then(data => setUser(data.user))
       .catch(() => localStorage.removeItem('radml_token'))
       .finally(() => setLoading(false))
@@ -31,8 +50,7 @@ export function useAuthProvider() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, email }),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Registration failed')
+    const data = await parseApiResponse(res, 'Registration failed')
     _storeToken(data.token, data.user)
     return data.user
   }, [])
@@ -43,8 +61,7 @@ export function useAuthProvider() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Login failed')
+    const data = await parseApiResponse(res, 'Login failed')
     _storeToken(data.token, data.user)
     return data.user
   }, [])

@@ -29,9 +29,6 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Download spaCy model
-        run: python -m spacy download en_core_web_sm
-
       - name: Run test suite (63 tests)
         env:
           KAGGLE_USERNAME: "ci_mock"

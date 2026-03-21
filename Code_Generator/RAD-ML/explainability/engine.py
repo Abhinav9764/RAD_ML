@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import socket
 import textwrap
 from pathlib import Path
 
@@ -147,6 +148,7 @@ class ExplainabilityEngine:
     def __init__(self, llm_client, config: dict):
         self._llm    = llm_client
         self._cfg    = config
+        self._explain_cfg = config.get("explainability", {})
         self._ws_dir = Path(config.get("codegen", {})
                             .get("workspace_dir",
                                  "Code_Generator/RAD-ML/workspace/current_app"))
@@ -262,7 +264,7 @@ class ExplainabilityEngine:
             if self._debug:
                 self._debug.debug(
                     "_generate_narrative",
-                    "Calling LLM to generate narrative"
+                    "Calling primary LLM to generate narrative"
                 )
             result = self._llm.generate(
                 _EXPLAIN_PROMPT.format(results_json=json.dumps(slim, indent=2))
@@ -277,11 +279,51 @@ class ExplainabilityEngine:
             if self._debug:
                 self._debug.warning(
                     "_generate_narrative",
-                    f"LLM call failed: {str(exc)[:100]}",
+                    f"Primary LLM call failed: {str(exc)[:100]}",
                     context={"exception": type(exc).__name__}
                 )
-            logger.warning("Narrative LLM call failed (%s) — using fallback", exc)
+            if self._explain_cfg.get("enable_ollama_fallback", False):
+                logger.warning("Narrative Gemini call failed (%s) — trying Ollama fallback", exc)
+                ollama_result = self._generate_narrative_via_ollama(slim)
+                if ollama_result:
+                    return ollama_result
+                logger.warning("Narrative Ollama fallback unavailable — using deterministic fallback")
+            else:
+                logger.warning("Narrative Gemini call failed (%s) — using deterministic fallback", exc)
             return self._fallback_narrative(db_results, job_result)
+
+    def _generate_narrative_via_ollama(self, slim: dict) -> str:
+        qwen_cfg = self._cfg.get("qwen", {})
+        candidates = self._resolve_ollama_candidates(qwen_cfg)
+        if not candidates:
+            return ""
+        if not self._is_ollama_available():
+            return ""
+
+        try:
+            import ollama as _ollama  # type: ignore
+        except Exception:
+            return ""
+
+        try:
+            available_models = self._list_ollama_models(_ollama)
+        except Exception:
+            available_models = []
+
+        prompt = _EXPLAIN_PROMPT.format(results_json=json.dumps(slim, indent=2))
+        for model_name in self._build_ollama_attempt_order(candidates, available_models)[:1]:
+            try:
+                response = _ollama.chat(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    options={"temperature": 0.2, "num_predict": 1200},
+                )
+                result = self._extract_ollama_content(response).strip()
+                if result:
+                    return result
+            except Exception as exc:
+                logger.warning("Ollama narrative failed for model '%s': %s", model_name, exc)
+        return ""
 
     # ── usage guide ───────────────────────────────────────────────────────────
     def _build_usage_guide(self, deploy_url: str, spec: dict,
@@ -393,6 +435,82 @@ class ExplainabilityEngine:
             logger.warning("Diagram generation failed (%s) — skipping", exc)
             return ""
 
+    @staticmethod
+    def _resolve_ollama_candidates(qwen_cfg: dict) -> list[str]:
+        configured = qwen_cfg.get("ollama_model_candidates", [])
+        candidates: list[str] = []
+        if isinstance(configured, str):
+            candidates.extend([p.strip() for p in configured.split(",") if p.strip()])
+        elif isinstance(configured, list):
+            candidates.extend([str(p).strip() for p in configured if str(p).strip()])
+        primary = str(qwen_cfg.get("ollama_model", "qwen2.5-coder:3b")).strip()
+        defaults = [primary, "qwen2.5-coder:3b", "qwen2.5:3b", "deepseek-coder", "llama3.2:3b"]
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for item in [*candidates, *defaults]:
+            model = str(item or "").strip()
+            key = model.lower()
+            if model and key not in seen:
+                seen.add(key)
+                ordered.append(model)
+        return ordered
+
+    @staticmethod
+    def _list_ollama_models(ollama_module) -> list[str]:
+        listing = ollama_module.list()
+        raw = listing.get("models", []) if isinstance(listing, dict) else getattr(listing, "models", []) or []
+        models: list[str] = []
+        for entry in raw:
+            name = (
+                entry.get("name") if isinstance(entry, dict)
+                else getattr(entry, "name", None)
+            ) or (
+                entry.get("model") if isinstance(entry, dict)
+                else getattr(entry, "model", None)
+            )
+            if name:
+                models.append(str(name).strip())
+        return [m for m in models if m]
+
+    @staticmethod
+    def _build_ollama_attempt_order(candidates: list[str], available: list[str]) -> list[str]:
+        if not available:
+            return candidates
+        available_l = {m.lower(): m for m in available}
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = candidate.lower()
+            if key in available_l and key not in seen:
+                ordered.append(available_l[key])
+                seen.add(key)
+        for model in available:
+            key = model.lower()
+            if key not in seen and any(tag in key for tag in ("qwen", "deepseek", "phi", "llama")):
+                ordered.append(model)
+                seen.add(key)
+        return ordered
+
+    @staticmethod
+    def _extract_ollama_content(response) -> str:
+        if isinstance(response, dict):
+            message = response.get("message")
+            if isinstance(message, dict):
+                return str(message.get("content", "") or "")
+            return str(response.get("response", "") or "")
+        message = getattr(response, "message", None)
+        if message is not None:
+            return str(getattr(message, "content", "") or "")
+        return str(getattr(response, "response", "") or "")
+
+    @staticmethod
+    def _is_ollama_available(host: str = "127.0.0.1", port: int = 11434) -> bool:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return True
+        except OSError:
+            return False
+
     # ── code preview ──────────────────────────────────────────────────────────
     @staticmethod
     def _build_code_preview(written_files: dict | None) -> dict:
@@ -452,8 +570,8 @@ def _build_diagram_png(task_type: str, job_result: dict, out_dir: Path) -> str:
         from diagrams.generic.storage import Storage
         from diagrams.onprem.compute import Server
     except ImportError:
-        logger.warning("diagrams library not installed — skipping diagram")
-        return ""
+        logger.warning("diagrams library not installed — using Pillow fallback")
+        return _build_simple_diagram_png(task_type, job_result, out_dir)
 
     row_count    = job_result.get("dataset", {}).get("row_count", 0)
     task_label   = task_type.title()
@@ -550,8 +668,64 @@ def _build_diagram_png(task_type: str, job_result: dict, out_dir: Path) -> str:
             return ""
         return base64.b64encode(png_path.read_bytes()).decode("ascii")
     except FileNotFoundError as e:
-        logger.warning(f"graphviz system tool not found (do graphviz install manually): {e}")
-        return ""
+        logger.warning(f"graphviz system tool not found; using Pillow fallback: {e}")
+        return _build_simple_diagram_png(task_type, job_result, out_dir)
     except Exception as e:
-        logger.warning(f"diagram generation failed: {e}")
+        logger.warning(f"diagram generation failed; using Pillow fallback: {e}")
+        return _build_simple_diagram_png(task_type, job_result, out_dir)
+
+
+def _build_simple_diagram_png(task_type: str, job_result: dict, out_dir: Path) -> str:
+    """Fallback architecture diagram that does not require graphviz."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        logger.warning("Pillow not installed — skipping fallback diagram")
         return ""
+
+    endpoint = job_result.get("sm_meta", {}).get("endpoint_name", "SageMaker endpoint")
+    rows = job_result.get("dataset", {}).get("row_count", 0)
+    task_label = str(task_type or "ml").title()
+
+    width, height = 1400, 760
+    image = Image.new("RGB", (width, height), "#0d0d1a")
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.load_default()
+    body_font = ImageFont.load_default()
+
+    boxes = [
+        ((70, 120, 270, 200), "User Prompt"),
+        ((330, 120, 570, 200), "Prompt Parser"),
+        ((630, 120, 920, 200), f"Dataset Search\n{rows:,} rows"),
+        ((980, 120, 1260, 200), "Preprocess + Split"),
+        ((220, 320, 520, 420), f"SageMaker Training\n{task_label}"),
+        ((560, 320, 860, 420), f"Endpoint\n{endpoint}"),
+        ((900, 320, 1220, 420), "Streamlit App"),
+        ((400, 540, 900, 640), "Prediction / Result"),
+    ]
+
+    def box(rect, text, fill, outline):
+        draw.rounded_rectangle(rect, radius=18, fill=fill, outline=outline, width=3)
+        draw.multiline_text((rect[0] + 18, rect[1] + 24), text, fill="#f2f3ff", font=body_font, spacing=6)
+
+    draw.text((70, 40), "RAD-ML Pipeline Architecture", fill="#f2f3ff", font=title_font)
+    for rect, text in boxes:
+        box(rect, text, "#18182e", "#7c6dfa")
+
+    arrows = [
+        ((270, 160), (330, 160)),
+        ((570, 160), (630, 160)),
+        ((920, 160), (980, 160)),
+        ((1120, 200), (760, 320)),
+        ((520, 370), (560, 370)),
+        ((860, 370), (900, 370)),
+        ((1060, 420), (760, 540)),
+    ]
+    for start, end in arrows:
+        draw.line([start, end], fill="#00e8c8", width=4)
+        draw.ellipse((end[0] - 6, end[1] - 6, end[0] + 6, end[1] + 6), fill="#00e8c8")
+
+    out_file = out_dir / "pipeline_architecture_fallback.png"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_file, format="PNG")
+    return base64.b64encode(out_file.read_bytes()).decode("ascii")

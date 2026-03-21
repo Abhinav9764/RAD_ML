@@ -1,208 +1,773 @@
 """
-generator/code_gen_factory.py
-==============================
-Layer 3 — Code Generator
+generator/code_gen_factory.py — LLM Code Generator (Streamlit-only)
+====================================================================
+Builds the prompt and calls the configured LLM to generate a complete
+Streamlit application.  No Flask, no HTML templates, no CSS files are
+produced — the only output artifact is a self-contained app.py and a
+matching test_app.py.
 
-Generates each file in the project one at a time, using:
-  - The full ProjectSpec from Layer 1
-  - The Architecture Plan from Layer 2
-
-Files generated (always):
-  app.py          - Flask web app with form and prediction route
-  predictor.py    - SageMaker endpoint caller (clean separation of concerns)
-  train.py        - Training utilities and metric computation
-  requirements.txt
-  README.md
-  tests/test_app.py
-
-Each file is generated with a focused, file-specific prompt so the LLM
-produces complete, production-grade code — not placeholder pseudocode.
+LLM backend priority (Qwen path):
+  1. HuggingFace Hub Inference API   — free tier, public models
+  2. Ollama local server             — fully offline
+  3. Offline stub                    — Streamlit base template fallback
 """
+
 from __future__ import annotations
+
+import ast
+import json
 import logging
 import re
 from pathlib import Path
+from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
-# ── Per-file generation prompts ───────────────────────────────────────────────
+# A CodeBundle now only carries "python" and "tests".
+# "html" and "css" are always empty strings for backward compatibility
+# but nothing in the pipeline writes them to disk.
+CodeBundle = Dict[str, str]  # {"python": ..., "tests": ..., "html": "", "css": ""}
 
-_FILE_PROMPT = """\
-You are a senior Python engineer writing production-grade code.
-
-=== PROJECT SPEC ===
-{spec_json}
-
-=== ARCHITECTURE PLAN ===
-{plan_json}
-
-=== YOUR TASK ===
-Generate ONLY the file: `{filename}`
-
-Requirements:
-- Python 3.11
-- Type hints on ALL functions
-- Docstrings on ALL classes and functions
-- Logging with `logging.getLogger(__name__)`
-- Proper error handling (try/except with specific exceptions)
-- NO placeholder comments like "# TODO" or "# implement this"
-- NO pseudocode — real, runnable implementation
-- Only import packages listed in the plan's "dependencies" plus stdlib
-- Match the function signatures defined in the plan exactly
-
-{extra_instructions}
-
-Return ONLY the file contents. No markdown fences. No explanation.
-"""
-
-_EXTRA = {
-    "app.py": """\
-- Flask app listening on host='0.0.0.0', port={flask_port}
-- GET /  → use `render_template('index.html')` with no variables
-- POST / → read form data, call predictor.predict(), use `render_template('index.html', result=...)`
-- The HTML form must have EXACTLY these input fields (no more, no fewer): {feature_list}
-- Validate all inputs before calling the endpoint (return 400 or render error if invalid)
-- Import predictor from predictor.py in the same directory
-""",
-
-    "templates/index.html": """\
-- Read the PROJECT SPEC above to understand the model's purpose.
-- Create a beautiful, modern HTML5 web page for the model using embedded CSS (dark-mode, clean typography).
-- Include an HTML `<form>` that POSTs to `/`.
-- The form MUST have exactly these input fields (name attributes must match exactly): {feature_list}
-- Add a beautiful section to display the prediction result (e.g. `{{{{% if result %}}}}...{{{{% endif %}}}}`).
-- Provide the full, production-ready HTML code containing all inputs.
-""",
-
-    "predictor.py": """\
-- Function `format_features(inputs: dict[str, float]) -> str`:
-  Converts input dict to a comma-separated CSV string in this EXACT column order:
-  {feature_list}
-  This order MUST match the SageMaker XGBoost training data column order.
-- Function `call_endpoint(csv_row: str, endpoint_name: str, region: str) -> float`:
-  Calls boto3 SageMaker Runtime invoke_endpoint with ContentType='text/csv'.
-  Parses and returns the float prediction.
-- Function `predict(inputs: dict[str, float], endpoint_name: str, region: str) -> dict`:
-  Full pipeline: validate → format → call → return {{'prediction': value, 'status': 'ok'}}
-- Endpoint name: {endpoint_name}
-- AWS region: {aws_region}
-- Handle boto3.ClientError, ValueError, and generic Exception separately
-""",
-
-    "train.py": """\
-- Function `load_dataset(path_or_uri: str) -> pd.DataFrame`:
-  Load CSV from local path or s3:// URI (use boto3 for S3)
-- Function `compute_metrics(y_true, y_pred, task_type: str) -> dict`:
-  For regression: return {{'rmse': float, 'mae': float, 'r2': float}}
-  For classification: return {{'accuracy': float, 'f1': float}}
-- Function `log_training_summary(metrics: dict, endpoint_name: str) -> None`:
-  Log all metrics and the endpoint URL in a clean formatted block
-- This is a utilities module, NOT a training entry point (SageMaker runs training)
-""",
-
-    "requirements.txt": """\
-Output a plain requirements.txt with these packages (no versions, one per line):
-flask, boto3, pandas, numpy
-Nothing else.
-""",
-
-    "README.md": """\
-Write a clear README with these sections:
-1. Project Overview (what it does, what it predicts)
-2. Setup (pip install, AWS credentials)
-3. Running the App (python app.py command)
-4. API Usage (what inputs to provide, what output to expect)
-5. Dataset Info (feature names and target)
-6. Architecture (one paragraph)
-Use markdown formatting.
-""",
-
-    "tests/test_app.py": """\
-- Use pytest (no unittest)
-- Mock boto3 SageMaker calls with unittest.mock.patch
-- Test `format_features` produces correct CSV string in correct column order
-- Test `predict` returns a dict with 'prediction' key on mocked success
-- Test `predict` raises or returns error dict on endpoint failure
-- Test Flask GET / returns 200 with an HTML form
-- Test Flask POST / with valid data returns 200
-- No network calls — all external calls must be mocked
-- Import from app and predictor modules using relative path setup in conftest or sys.path
-""",
-}
-
-
-def _clean(text: str) -> str:
-    """Strip markdown code fences."""
-    text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip(), flags=re.MULTILINE)
-    text = re.sub(r"\n?```\s*$",        "", text.strip(), flags=re.MULTILINE)
-    return text.strip()
+WORKSPACE_APP_DIR = Path("workspace/current_app")
 
 
 class CodeGenFactory:
-    """Generate all project files from ProjectSpec + Architecture Plan."""
+    """
+    Calls DeepSeek or Qwen with the structured prompt template and writes
+    the generated Streamlit app to the workspace.
 
-    def __init__(self, llm_client, config: dict):
-        self._llm    = llm_client
-        self._cfg    = config
-        self._ws_dir = Path(config.get("codegen", {})
-                           .get("workspace_dir",
-                                "Code_Generator/RAD-ML/workspace/current_app"))
-        self._ws_dir.mkdir(parents=True, exist_ok=True)
-        self._port   = int(config.get("codegen", {}).get("flask_port", 7000))
+    Args:
+        cfg: Full config dict.
+    """
 
-    # ── public ────────────────────────────────────────────────────────────────
-    def generate_all(self, project_spec: dict, plan: dict) -> dict[str, Path]:
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.primary_llm = cfg.get("primary_llm", "qwen")
+        self.deepseek_cfg = cfg.get("deepseek", {})
+        self.qwen_cfg = cfg.get("qwen", {})
+        self._qwen_backend: Optional[str] = None  # determined lazily
+        self._current_engine_meta: dict = {}
+
+    # ── Public API ────────────────────────────────────────────────────────────
+    def generate(
+        self,
+        mode: str,
+        engine_meta: dict,
+        data_source_info: dict,
+        user_prompt: str,
+        prev_error: Optional[str] = None,
+    ) -> CodeBundle:
         """
-        Generate every file in project_spec['deliverables'].
+        Build prompt → call LLM → parse JSON → return CodeBundle.
 
-        Returns
-        -------
-        dict mapping filename → absolute Path of the written file
+        The LLM is instructed to return ONLY Streamlit code.  If the output
+        fails validation it falls back to the offline Streamlit stub.
         """
-        import json
-        spec_json = json.dumps(project_spec, indent=2)
-        plan_json = json.dumps(plan, indent=2)
+        system_prompt = self._build_system_prompt()
+        task_prompt = self._build_task_prompt(
+            mode, engine_meta, data_source_info, user_prompt, prev_error
+        )
+        self._current_engine_meta = engine_meta
 
-        features      = project_spec.get("feature_cols", project_spec.get("features", []))
-        feature_list  = ", ".join(features)
-        endpoint_name = project_spec.get("endpoint_name", "radml-endpoint")
-        aws_region    = project_spec.get("aws_region",    "us-east-1")
-        target        = project_spec.get("target_col",    project_spec.get("target", "output"))
-        flask_port    = project_spec.get("flask_port",    self._port)
+        llm_key = self.primary_llm
+        temp = self._get_temperature(llm_key)
+        full_resp = self._call_llm(llm_key, system_prompt, task_prompt, temp)
 
-        deliverables = project_spec.get("deliverables", list(_EXTRA.keys()))
-        written: dict[str, Path] = {}
+        try:
+            bundle = self._parse_json_response(full_resp)
+        except Exception as exc:
+            log.warning("Failed to parse LLM output as JSON (%s). Using stub.", exc)
+            bundle = self._parse_json_response(self._stub_bundle_json(mode))
 
-        for filename in deliverables:
-            logger.info("Generating %s …", filename)
+        python_code = bundle.get("python", "")
+        if not python_code.strip():
+            log.warning("Generated bundle missing python code. Using stub.")
+            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+        elif not self._is_streamlit_python(python_code):
+            log.warning("Generated code is not valid Streamlit. Using stub.")
+            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+        elif not self._matches_expected_mode(python_code, mode):
+            log.warning("Generated code does not match mode '%s'. Using stub.", mode)
+            bundle = self._parse_json_response(self._stub_bundle_json(mode))
 
-            extra_tmpl = _EXTRA.get(filename, "")
-            extra = extra_tmpl.format(
-                feature_list  = feature_list,
-                endpoint_name = endpoint_name,
-                aws_region    = aws_region,
-                target        = target,
-                flask_port    = flask_port,
-            ) if extra_tmpl else ""
+        # Ensure html/css are always empty — Streamlit handles its own UI
+        bundle["html"] = ""
+        bundle["css"] = ""
 
-            prompt = _FILE_PROMPT.format(
-                spec_json = spec_json,
-                plan_json = plan_json,
-                filename  = filename,
-                extra_instructions = extra,
+        log.info(
+            "Code bundle generated — py=%d chars  tests=%d chars",
+            len(bundle.get("python", "")),
+            len(bundle.get("tests", "")),
+        )
+        return bundle
+
+    def write_to_workspace(self, bundle: CodeBundle, app_dir: Path = WORKSPACE_APP_DIR) -> None:
+        """
+        Write app.py and test_app.py to workspace/current_app/.
+        No HTML or CSS files are written — Streamlit manages its own UI.
+        """
+        app_dir.mkdir(parents=True, exist_ok=True)
+        (app_dir / "app.py").write_text(bundle.get("python", ""), encoding="utf-8")
+        (app_dir / "test_app.py").write_text(bundle.get("tests", ""), encoding="utf-8")
+        log.info("Workspace written: app.py, test_app.py → %s", app_dir)
+
+    # ── Prompt Builders ───────────────────────────────────────────────────────
+    @staticmethod
+    def _build_system_prompt() -> str:
+        return (
+            "You are an expert Python developer specialising in Streamlit applications. "
+            "Always respond in English only. "
+            "Never use Flask, FastAPI, Django, or any other web framework. "
+            "All UI must be built with Streamlit widgets only."
+        )
+
+    def _build_task_prompt(
+        self,
+        mode: str,
+        engine_meta: dict,
+        data_source_info: dict,
+        user_prompt: str,
+        prev_error: Optional[str],
+    ) -> str:
+        mode_label = {
+            "chatbot": "Chatbot",
+            "recommendation": "Recommendation System",
+        }.get(mode, "Predictive ML")
+
+        data_source_lbl = self._format_data_source(mode, engine_meta, data_source_info)
+        algorithm_lbl = self._format_algorithm(mode, engine_meta)
+        features_block = self._format_features(mode, engine_meta)
+        connectivity = "llama-index and chromadb" if mode == "chatbot" else "boto3"
+        chat_or_form = self._form_or_chat_instruction(mode, engine_meta)
+        scope_hint = self._scope_guardrail_instruction(user_prompt)
+        region_hint = self._region_input_instruction(user_prompt, mode)
+        metrics_hint = self._metrics_instruction(mode)
+
+        prompt = f"""Task: Build a full-stack Streamlit application based on the following context.
+DO NOT use Flask, FastAPI, or any web framework. ALL UI must be Streamlit-native.
+
+Mode: {mode_label}
+Data Source: {data_source_lbl}
+Algorithm/Model: {algorithm_lbl}
+
+User Goal: {user_prompt}
+
+Requirements:
+
+Requirement 1 — app.py (Streamlit only):
+   - Start with `st.set_page_config(page_title="...", layout="wide")`.
+   - Inject a dark theme via `st.markdown("<style>...</style>", unsafe_allow_html=True)`.
+   - Use ONLY Streamlit widgets: `st.text_input`, `st.number_input`, `st.selectbox`,
+     `st.columns`, `st.tabs`, `st.form`, `st.chat_input`, `st.chat_message`, etc.
+   - NEVER import or use Flask, FastAPI, render_template, jsonify, or @app.route.
+
+   If ML or Recommendation:
+     - Generate Streamlit widgets for features {features_block}.
+     - Use ONLY the prompt-required inference inputs. Do not expose unrelated dataset columns.
+     - If a requested business input must expand into multiple model columns, keep the UI minimal and only expose the unavoidable derived fields.
+     - Data Parsing: strip non-numeric chars from string inputs (e.g. "200sq.ft" → 200.0)
+       using regex before building the payload. Handle ValueError for float conversion.
+     - Data Validation: show `st.error` for missing or invalid values.
+     - Use `st.form` + `st.form_submit_button` for the prediction form.
+     - Show results with `st.success` or a styled `st.markdown` block.
+     {scope_hint}
+     {region_hint}
+     {metrics_hint}
+
+   If Recommendation:
+     - Display Top-N results as styled cards using `st.container` / `st.markdown`.
+     - Separate input column from results column using `st.columns`.
+
+   If Chatbot:
+     - Use the LlamaIndex framework with Chroma Vector Store (data/vector_store/index).
+     - Use the Ollama model for SLM generation.
+     - Implement: Data → embeddings → vector DB → query → top-k retrieval → re-rank → LLM answer.
+     - Use `st.chat_message` / `st.chat_input` for the conversation UI.
+     - Keep chat history in `st.session_state`; render all messages each rerun.
+     - Lazy-load the RAG index with `@st.cache_resource` — do NOT load at module import time.
+     - Fall back gracefully if the SLM returns an empty response.
+     - Resolve project root from `Path(__file__).resolve()`.
+
+   General:
+     - Connectivity: use the {connectivity} libraries.
+     - Wrap prediction/inference in try-except; use `st.error("...")` on failure.
+     - Use `st.spinner` while any request is in flight.
+     - Include sidebar with algorithm badge, model info, and runtime metrics.
+     - All text, labels, and widget titles in English only.
+
+Requirement 2 — test_app.py:
+   - Use `unittest` or `pytest`.
+   - Test ONLY pure Python functions (data validation, encoding, payload building).
+   - Do NOT import or call any Streamlit functions in tests.
+   - For ML/Recommendation: mock SageMaker/boto3 calls.
+   - For Chatbot: mock RAG retrieval.
+   - If geographic input is needed, add a test that a missing region fails validation.
+
+Requirement 3 — Layout:
+   {chat_or_form}
+   - For ML/Recommendation: add a "Bulk Predict" tab with `st.file_uploader` for CSV input.
+   - Show a progress bar (`st.progress`) during bulk operations.
+   - Display downloadable results with `st.download_button`.
+
+Output ONLY valid JSON with exactly these keys:
+{{ "python": "<app.py content>", "tests": "<test_app.py content>", "html": "", "css": "" }}
+Do NOT include any explanation, markdown fences, or text outside the JSON object."""
+
+        if prev_error:
+            prompt += (
+                f"\n\nIMPORTANT — The previous attempt failed with this error. "
+                f"Fix the code to resolve it:\n```\n{prev_error[:1500]}\n```"
+            )
+        return prompt
+
+    # ── LLM Dispatch ──────────────────────────────────────────────────────────
+    def _get_temperature(self, llm_key: str) -> float:
+        cfg = self.deepseek_cfg if llm_key == "deepseek" else self.qwen_cfg
+        return float(cfg.get("temperature", 0.3))
+
+    def _call_llm(self, llm_key: str, system: str, task: str, temp: float) -> str:
+        if llm_key == "deepseek":
+            return self._call_deepseek(system, task, temp)
+        return self._call_qwen(system, task, temp)
+
+    def _call_deepseek(self, system: str, task: str, temp: float) -> str:
+        api_key = self.deepseek_cfg.get("api_key", "")
+        model = self.deepseek_cfg.get("model", "deepseek-coder")
+        max_tok = int(self.deepseek_cfg.get("max_tokens", 4096))
+
+        # Infer mode for stub fallback
+        mode_hint = self._infer_mode_hint(task)
+
+        if not api_key or "YOUR" in api_key:
+            log.warning("DeepSeek API key not set — returning stub.")
+            return self._stub_bundle_json(mode_hint)
+
+        try:
+            from openai import OpenAI  # type: ignore
+        except ImportError:
+            log.warning("openai package missing — falling back to Qwen/stub.")
+            return self._call_qwen(system, task, temp)
+
+        try:
+            client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": task},
+                ],
+                temperature=temp,
+                max_tokens=max_tok,
+            )
+            return resp.choices[0].message.content
+        except Exception as exc:
+            log.warning("DeepSeek call failed: %s. Falling back to Qwen/stub.", exc)
+            return self._call_qwen(system, task, temp)
+
+    # ── Qwen — free backends ──────────────────────────────────────────────────
+    def _call_qwen(self, system: str, task: str, temp: float) -> str:
+        mode_hint = self._infer_mode_hint(task)
+
+        if self._qwen_backend in (None, "hf"):
+            result = self._call_qwen_hf(system, task, temp)
+            if result is not None:
+                self._qwen_backend = "hf"
+                return result
+            log.warning("HuggingFace Hub unavailable — trying Ollama.")
+
+        if self._qwen_backend in (None, "ollama"):
+            result = self._call_qwen_ollama(system, task, temp)
+            if result is not None:
+                self._qwen_backend = "ollama"
+                return result
+            log.warning("Ollama unavailable — falling back to offline stub.")
+
+        self._qwen_backend = "stub"
+        log.warning("Qwen: using offline Streamlit stub.")
+        return self._stub_bundle_json(mode_hint)
+
+    def _call_qwen_hf(self, system: str, task: str, temp: float) -> Optional[str]:
+        try:
+            from huggingface_hub import InferenceClient  # type: ignore
+        except ImportError:
+            log.debug("huggingface_hub not installed — skipping HF backend.")
+            return None
+
+        hf_token = self.qwen_cfg.get("hf_token", "")
+        hf_model = self.qwen_cfg.get("hf_model", "Qwen/Qwen2.5-Coder-3B-Instruct")
+        max_tok = int(self.qwen_cfg.get("max_tokens", 4096))
+
+        try:
+            client = InferenceClient(
+                model=hf_model,
+                token=hf_token if hf_token and "YOUR" not in hf_token else None,
+            )
+            response = client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": task},
+                ],
+                max_tokens=max_tok,
+                temperature=max(temp, 0.01),
+            )
+            content = response.choices[0].message.content
+            log.info("Qwen via HuggingFace Hub (%s) — %d chars.", hf_model, len(content or ""))
+            return content
+        except Exception as exc:
+            log.warning("HuggingFace Hub call failed: %s", exc)
+            return None
+
+    def _call_qwen_ollama(self, system: str, task: str, temp: float) -> Optional[str]:
+        try:
+            import ollama as _ollama  # type: ignore
+        except ImportError:
+            log.debug("ollama package not installed — skipping Ollama backend.")
+            return None
+
+        max_tok = int(self.qwen_cfg.get("max_tokens", 4096))
+        candidates = self._resolve_ollama_candidates(self.qwen_cfg)
+        available_models = self._list_ollama_models(_ollama)
+        attempt_order = self._build_ollama_attempt_order(candidates, available_models)
+
+        if not attempt_order:
+            log.warning("No Ollama model candidates configured.")
+            return None
+
+        last_error: Optional[Exception] = None
+        for ollama_model in attempt_order:
+            try:
+                response = _ollama.chat(
+                    model=ollama_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": task},
+                    ],
+                    options={"temperature": temp, "num_predict": max_tok},
+                )
+                content = self._extract_ollama_content(response)
+                if content.strip():
+                    log.info("Qwen via Ollama (%s) — %d chars.", ollama_model, len(content))
+                    return content
+                log.warning("Ollama model '%s' returned empty content.", ollama_model)
+            except Exception as exc:
+                last_error = exc
+                log.warning("Ollama call failed for model '%s': %s", ollama_model, exc)
+
+        if available_models:
+            log.warning("Ollama available models: %s", ", ".join(available_models[:10]))
+        if last_error:
+            log.warning("All Ollama attempts failed. Last error: %s", last_error)
+        return None
+
+    # ── Response Parsing ──────────────────────────────────────────────────────
+    @staticmethod
+    def _parse_json_response(raw: str) -> CodeBundle:
+        cleaned = CodeGenFactory._strip_markdown_fences(str(raw or ""))
+        bundle = CodeGenFactory._safe_json_load(cleaned)
+        if bundle is None:
+            candidate = CodeGenFactory._extract_json_object(cleaned)
+            bundle = CodeGenFactory._safe_json_load(candidate)
+        if not isinstance(bundle, dict):
+            raise ValueError(f"No JSON object found in LLM response:\n{cleaned[:400]}")
+        return {
+            "python": str(bundle.get("python", "") or ""),
+            "tests": str(bundle.get("tests", "") or ""),
+            "html": "",   # always empty — Streamlit handles its own UI
+            "css": "",    # always empty
+        }
+
+    @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        text = re.sub(r"```(?:json|python|text)?\s*", "", text, flags=re.IGNORECASE)
+        return text.strip().rstrip("```").strip()
+
+    @staticmethod
+    def _safe_json_load(payload: str) -> Optional[dict]:
+        payload = (payload or "").strip()
+        if not payload:
+            return None
+        try:
+            data = json.loads(payload)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            pass
+        try:
+            data = ast.literal_eval(payload)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _extract_json_object(text: str) -> str:
+        text = (text or "").strip()
+        start = text.find("{")
+        if start < 0:
+            return ""
+        depth, in_string, escaping = 0, False, False
+        for idx in range(start, len(text)):
+            ch = text[idx]
+            if in_string:
+                if escaping:
+                    escaping = False
+                elif ch == "\\":
+                    escaping = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start: idx + 1]
+        return ""
+
+    # ── Validation Helpers ────────────────────────────────────────────────────
+    @staticmethod
+    def _is_streamlit_python(python_code: str) -> bool:
+        src = str(python_code or "").lower()
+        has_streamlit = (
+            "import streamlit" in src
+            or "from streamlit" in src
+            or "st.set_page_config" in src
+        )
+        # Reject any Flask contamination
+        has_flask = (
+            "from flask" in src
+            or "import flask" in src
+            or "flask(" in src
+            or "@app.route" in src
+            or "render_template" in src
+            or "jsonify" in src
+        )
+        return has_streamlit and not has_flask
+
+    @staticmethod
+    def _matches_expected_mode(python_code: str, mode: str) -> bool:
+        src = str(python_code or "").lower()
+        markers = {
+            "ml": (
+                "make_prediction", "predict", "st.form", "st.file_uploader",
+                "st.number_input", "st.text_input", "sagemaker",
+            ),
+            "chatbot": (
+                "st.chat_input", "st.chat_message", "get_rag", "ragbuilder", "query(",
+            ),
+            "recommendation": (
+                "recommendation", "recommend", "suggest", "top_n", "predict",
+            ),
+        }
+        return any(m in src for m in markers.get(mode, ()))
+
+    # ── Formatting Helpers ────────────────────────────────────────────────────
+    @staticmethod
+    def _format_data_source(mode: str, engine_meta: dict, data_source_info: dict) -> str:
+        if mode == "chatbot":
+            count = data_source_info.get("doc_count", "?")
+            return f"Local Chroma Vector DB — {count} web documents"
+        s3 = engine_meta.get("s3_uri", data_source_info.get("s3_uri", "s3://bucket/data.csv"))
+        return f"S3 CSV: {s3}"
+
+    @staticmethod
+    def _format_algorithm(mode: str, engine_meta: dict) -> str:
+        if mode == "chatbot":
+            slm = engine_meta.get("slm_model", "Phi-3 / Ollama")
+            return f"SLM ({slm}) + Chroma RAG (LlamaIndex)"
+        algorithm = str(engine_meta.get("algorithm", "")).strip()
+        if algorithm:
+            return algorithm
+        endpoint = engine_meta.get("endpoint", "rad-ml-endpoint")
+        model_name = engine_meta.get("model_name", "rad-ml-model")
+        return f"AWS SageMaker Endpoint ({endpoint}) — model: {model_name}"
+
+    @staticmethod
+    def _format_features(mode: str, engine_meta: dict) -> str:
+        if mode not in ("ml", "recommendation"):
+            return ""
+        features: List[str] = engine_meta.get("features", [])
+        requested: List[str] = engine_meta.get("requested_features", [])
+        if features and requested:
+            return f"model features={features}, requested inputs={requested}"
+        return str(features) if features else "['feature_1', 'feature_2', ...]"
+
+    @staticmethod
+    def _form_or_chat_instruction(mode: str, engine_meta: dict) -> str:
+        if mode == "chatbot":
+            return (
+                "- Build a Streamlit chat interface using `st.chat_message` and `st.chat_input`.\n"
+                "   - Keep chat history in `st.session_state`; render all messages on each rerun.\n"
+                "   - Show a spinner while generating the assistant response.\n"
+                "   - Display runtime metrics (response count, avg latency) in the sidebar."
+            )
+        if mode == "recommendation":
+            features: List[str] = engine_meta.get("features", ["user_id", "item_id"])
+            feat_list = ", ".join(features[:15])
+            return (
+                f"- Build a Streamlit recommendation interface with inputs for: {feat_list}.\n"
+                "   - Use `st.columns` to separate inputs from Top-N results.\n"
+                "   - Render recommendations as styled cards using `st.markdown`."
+            )
+        features: List[str] = engine_meta.get("features", ["feature_1", "feature_2"])
+        feat_list = ", ".join(features[:15])
+        return (
+            f"- Build a Streamlit ML form with labelled widgets for: {feat_list}.\n"
+            "   - Use `st.tabs` to separate Single Predict and Bulk Predict.\n"
+            "   - Use `st.form` + `st.form_submit_button` for clean submit flow.\n"
+            "   - Display prediction with `st.success` or a styled markdown div."
+        )
+
+    @staticmethod
+    def _scope_guardrail_instruction(user_prompt: str) -> str:
+        prompt_l = (user_prompt or "").lower()
+        if any(t in prompt_l for t in ("house", "housing", "real estate", "price", "rent")):
+            return (
+                "- Restrict inference data to property-price records only; "
+                "exclude unrelated domains."
+            )
+        return (
+            "- Restrict inference data to rows directly relevant to the prompt domain."
+        )
+
+    @staticmethod
+    def _region_input_instruction(user_prompt: str, mode: str) -> str:
+        if mode != "ml":
+            return ""
+        prompt_l = (user_prompt or "").lower()
+        needs_region = any(
+            t in prompt_l for t in ("region", "state", "city", "location", "area", "india", "indian")
+        )
+        if needs_region:
+            return (
+                "- Add a required categorical input for the location/region field. "
+                "Show `st.error` when missing and stop prediction."
+            )
+        return (
+            "- If location-specific prediction is requested, include and validate a required region input."
+        )
+
+    @staticmethod
+    def _metrics_instruction(mode: str) -> str:
+        if mode == "chatbot":
+            return (
+                "- Show lightweight runtime metrics in the sidebar "
+                "(response count, average latency ms)."
+            )
+        if mode == "recommendation":
+            return (
+                "- Display relevance score, item category, or matching confidence "
+                "alongside each recommendation."
+            )
+        return (
+            "- Compute and display algorithm-specific metrics in the sidebar. "
+            "For regression: MAE, RMSE, R². For classification: Accuracy, Precision, Recall, F1."
+        )
+
+    # ── Offline Stub ──────────────────────────────────────────────────────────
+    def _stub_bundle_json(self, mode: str) -> str:
+        from generator.base_streamlit import (
+            STREAMLIT_APP_CHATBOT,
+            STREAMLIT_APP_ML,
+            STREAMLIT_APP_RECOMMENDATION,
+        )
+
+        template_map = {
+            "chatbot": STREAMLIT_APP_CHATBOT,
+            "recommendation": STREAMLIT_APP_RECOMMENDATION,
+        }
+        python_code = template_map.get(mode, STREAMLIT_APP_ML)
+
+        # Patch FEATURES and ENDPOINT_NAME into the ML template when metadata is available
+        if mode == "ml" and self._current_engine_meta:
+            features = self._current_engine_meta.get("features", [])
+            endpoint = self._current_engine_meta.get("endpoint", "rad-ml-endpoint")
+            if features:
+                features_str = "[\n" + ",\n".join(f'    "{f}"' for f in features) + "\n]"
+                python_code = re.sub(
+                    r'FEATURES[:\s]*List\[str\]\s*=\s*list\(CFG\.get\("ml_features",\s*\[\]\)\)\s*or\s*\[.*?\]',
+                    f'FEATURES: List[str] = {features_str}',
+                    python_code,
+                    flags=re.DOTALL,
+                )
+            if endpoint:
+                python_code = re.sub(
+                    r'ENDPOINT_NAME\s*=\s*os\.environ\.get\(\s*"SAGEMAKER_ENDPOINT",\s*CFG\.get\("aws",\s*\{\}\)\.get\("sagemaker_endpoint_name",\s*"rad-ml-endpoint"\),\s*\)',
+                    f'ENDPOINT_NAME = os.environ.get("SAGEMAKER_ENDPOINT", "{endpoint}")',
+                    python_code,
+                    flags=re.DOTALL,
+                )
+
+        # Build matching test stubs
+        if mode == "chatbot":
+            tests_code = (
+                "import unittest\n"
+                "from unittest.mock import MagicMock, patch\n\n"
+                "class TestChatbotApp(unittest.TestCase):\n"
+                "    def test_generate_answer_empty_question(self):\n"
+                "        import importlib, sys\n"
+                "        # Import without triggering Streamlit at module level\n"
+                "        with patch.dict(sys.modules, {'streamlit': MagicMock()}):\n"
+                "            import app as app_module\n"
+                "            result = app_module.generate_answer('')\n"
+                "            self.assertIsInstance(result, str)\n"
+                "            self.assertGreater(len(result), 0)\n\n"
+                "    def test_generate_answer_no_rag(self):\n"
+                "        with patch('app.get_rag', return_value=None):\n"
+                "            import app as app_module\n"
+                "            result = app_module.generate_answer('What is AI?')\n"
+                "            self.assertIn('unavailable', result.lower())\n\n"
+                "if __name__ == '__main__':\n"
+                "    unittest.main()\n"
+            )
+        elif mode == "recommendation":
+            tests_code = (
+                "import unittest\n"
+                "from unittest.mock import MagicMock, patch\n\n"
+                "class TestRecommenderApp(unittest.TestCase):\n"
+                "    def test_encode_feature_numeric(self):\n"
+                "        import importlib, sys\n"
+                "        with patch.dict(sys.modules, {'streamlit': MagicMock()}):\n"
+                "            import app as app_module\n"
+                "            self.assertEqual(app_module._encode_feature('score', '3.5'), '3.5')\n\n"
+                "    def test_validate_payload_missing(self):\n"
+                "        with patch.dict(__import__('sys').modules, {'streamlit': MagicMock()}):\n"
+                "            import app as app_module\n"
+                "            ok, msg = app_module.validate_payload({})\n"
+                "            self.assertFalse(ok)\n"
+                "            self.assertIn('Missing', msg)\n\n"
+                "if __name__ == '__main__':\n"
+                "    unittest.main()\n"
+            )
+        else:  # ml
+            tests_code = (
+                "import unittest\n"
+                "from unittest.mock import MagicMock, patch\n\n"
+                "class TestMLApp(unittest.TestCase):\n"
+                "    def setUp(self):\n"
+                "        import sys\n"
+                "        self._st_patcher = patch.dict(sys.modules, {'streamlit': MagicMock()})\n"
+                "        self._st_patcher.start()\n"
+                "        import importlib\n"
+                "        import app as app_module\n"
+                "        importlib.reload(app_module)\n"
+                "        self.app = app_module\n\n"
+                "    def tearDown(self):\n"
+                "        self._st_patcher.stop()\n\n"
+                "    def test_encode_feature_numeric(self):\n"
+                "        self.assertEqual(self.app._encode_feature('area', ' 1500.5 '), '1500.5')\n\n"
+                "    def test_encode_feature_strips_units(self):\n"
+                "        self.assertEqual(self.app._encode_feature('area', '200sq.ft'), '200.0')\n\n"
+                "    def test_encode_feature_region(self):\n"
+                "        val = self.app._encode_feature('region', 'north')\n"
+                "        self.assertTrue(val.isdigit())\n\n"
+                "    def test_validate_payload_missing(self):\n"
+                "        ok, msg = self.app.validate_payload({})\n"
+                "        self.assertFalse(ok)\n"
+                "        self.assertIn('Missing required fields', msg)\n\n"
+                "    def test_make_prediction_local_fallback(self):\n"
+                "        with patch.object(self.app, 'get_sm_runtime', return_value=None):\n"
+                "            result = self.app.make_prediction(['100.0', '200.0'])\n"
+                "            self.assertIsInstance(result, str)\n\n"
+                "if __name__ == '__main__':\n"
+                "    unittest.main()\n"
             )
 
-            try:
-                raw   = self._llm.generate(prompt)
-                code  = _clean(raw)
-            except Exception as exc:
-                logger.error("Failed to generate %s: %s", filename, exc)
-                code = f"# Generation failed: {exc}\n"
+        return json.dumps({"python": python_code, "tests": tests_code, "html": "", "css": ""})
 
-            out_path = self._ws_dir / filename
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(code, encoding="utf-8")
-            written[filename] = out_path
-            logger.info("  Written: %s (%d lines)", out_path, code.count("\n"))
+    # ── Utility Helpers ───────────────────────────────────────────────────────
+    @staticmethod
+    def _infer_mode_hint(task: str) -> str:
+        t = task.lower()
+        if "chatbot" in t:
+            return "chatbot"
+        if "recommendation" in t:
+            return "recommendation"
+        return "ml"
 
-        return written
+    @staticmethod
+    def _resolve_ollama_candidates(qwen_cfg: dict) -> List[str]:
+        configured = qwen_cfg.get("ollama_model_candidates", [])
+        candidates: List[str] = []
+        if isinstance(configured, str):
+            candidates.extend([p.strip() for p in configured.split(",") if p.strip()])
+        elif isinstance(configured, list):
+            candidates.extend([str(p).strip() for p in configured if str(p).strip()])
+        primary = str(qwen_cfg.get("ollama_model", "qwen2.5-coder:3b")).strip()
+        defaults = [
+            primary, "qwen2.5-coder:3b", "qwen2.5:3b", "qwen2.5-coder:1.5b",
+            "deepseek-coder:1.3b", "phi3.5:3.8b", "llama3.2:3b",
+        ]
+        ordered: List[str] = []
+        seen: set = set()
+        for item in [*candidates, *defaults]:
+            model = str(item or "").strip()
+            if model and model.lower() not in seen:
+                seen.add(model.lower())
+                ordered.append(model)
+        return ordered
+
+    @staticmethod
+    def _list_ollama_models(ollama_module) -> List[str]:
+        try:
+            listing = ollama_module.list()
+        except Exception as exc:
+            log.debug("Could not list Ollama models: %s", exc)
+            return []
+        models: List[str] = []
+        raw = (
+            listing.get("models", []) if isinstance(listing, dict)
+            else getattr(listing, "models", []) or []
+        )
+        for entry in raw:
+            name = (
+                entry.get("name") or entry.get("model")
+                if isinstance(entry, dict)
+                else getattr(entry, "name", None) or getattr(entry, "model", None)
+            )
+            if name:
+                models.append(str(name).strip())
+        return [m for m in models if m]
+
+    @staticmethod
+    def _build_ollama_attempt_order(candidates: List[str], available: List[str]) -> List[str]:
+        if not available:
+            return candidates
+        avail_set = {m.lower() for m in available}
+        ordered: List[str] = []
+        seen: set = set()
+        for c in candidates:
+            k = c.lower()
+            if k in avail_set and k not in seen:
+                ordered.append(c)
+                seen.add(k)
+        preferred = ("coder", "qwen", "deepseek", "phi", "llama3")
+        for m in available:
+            k = m.lower()
+            if k in seen:
+                continue
+            if any(size in k for size in ["7b", "6.7b", "8b", "14b", "32b", "33b"]):
+                continue
+            if any(t in k for t in preferred):
+                ordered.append(m)
+                seen.add(k)
+        for c in candidates:
+            k = c.lower()
+            if k not in seen:
+                ordered.append(c)
+                seen.add(k)
+        return ordered
+
+    @staticmethod
+    def _extract_ollama_content(response) -> str:
+        if isinstance(response, dict):
+            msg = response.get("message")
+            if isinstance(msg, dict):
+                return str(msg.get("content", "") or "")
+            return str(response.get("response", "") or "")
+        msg = getattr(response, "message", None)
+        if msg is not None:
+            content = getattr(msg, "content", None)
+            if content is not None:
+                return str(content)
+        return str(getattr(response, "response", None) or response or "")

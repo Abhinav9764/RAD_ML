@@ -19,13 +19,34 @@ from pathlib import Path
 import bcrypt
 
 logger = logging.getLogger(__name__)
+_HERE = Path(__file__).resolve().parent
+_PROJECT_ROOT = _HERE.parent.parent
 
 
 class AuthDB:
     def __init__(self, db_path: str = "data/users.db"):
-        self._path = Path(db_path)
+        self._path = self._resolve_path(db_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Auth DB path resolved to %s", self._path)
         self._init_schema()
+
+    @staticmethod
+    def _resolve_path(db_path: str) -> Path:
+        path = Path(db_path).expanduser()
+        if path.is_absolute():
+            return path
+
+        # Prefer the backend-local data directory so auth always uses the
+        # same SQLite file regardless of the process working directory.
+        backend_relative = (_HERE / path).resolve()
+        if backend_relative.parent.exists() or backend_relative.exists():
+            return backend_relative
+
+        project_relative = (_PROJECT_ROOT / path).resolve()
+        if project_relative.exists():
+            return project_relative
+
+        return backend_relative
 
     # ── schema ────────────────────────────────────────────────────────────────
     def _conn(self) -> sqlite3.Connection:

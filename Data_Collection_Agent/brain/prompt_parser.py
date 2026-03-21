@@ -385,33 +385,90 @@ def _build_spec_from_prompt(prompt: str) -> dict:
 
 def _extract_input_params(low: str, tokens: list[str]) -> list[str]:
     params: list[str] = []
-    pattern = re.compile(
-        r"\b(based on|using|given|for a|with|input|provide|enter)\b"
-        r"\s+([a-z0-9 ,/&]+?)(?:\s+and\s+([a-z0-9 ,/&]+?))?(?:\s*,|\s+to\s|\s+predict|\s+we\s|$)",
-        re.IGNORECASE,
+    normalized = (
+        low.replace("no.of", "number of")
+        .replace("no of", "number of")
+        .replace("no.", "number ")
+        .replace("&", ",")
+        .replace("/", ",")
     )
-    for m in pattern.finditer(low):
-        raw = " ".join(filter(None, [m.group(2), m.group(3)]))
-        for p in re.split(r"[,/&]|\band\b|\bor\b", raw):
-            p = p.strip()
-            if p and len(p) > 2 and p not in _STOP and p not in _NOISE:
-                params.append(p)
+
+    clause_patterns = [
+        r"\bbased on\b\s+(.+?)(?:\s+to\s+(?:predict|estimate|forecast|classify)\b|$)",
+        r"\busing\b\s+(.+?)(?:\s+to\s+(?:predict|estimate|forecast|classify)\b|$)",
+        r"\bwith\b\s+(.+?)(?:\s+to\s+(?:predict|estimate|forecast|classify)\b|$)",
+        r"\bgiven\b\s+(.+?)(?:\s+to\s+(?:predict|estimate|forecast|classify)\b|$)",
+    ]
+
+    def _canonicalize_param(raw_param: str) -> list[str]:
+        value = re.sub(r"\b(the|a|an|of|for|input|inputs|provide|enter)\b", " ", raw_param)
+        value = re.sub(r"\s+", " ", value).strip(" ,.")
+        if not value:
+            return []
+
+        parts = [p.strip(" ,.") for p in re.split(r",|\band\b|\bor\b", value) if p.strip(" ,.")]
+        if not parts:
+            parts = [value]
+
+        canonical: list[str] = []
+        for part in parts:
+            p = part.strip()
+            if not p:
+                continue
+            replacements = [
+                (r"\bnumber of bedrooms?\b", "bedrooms"),
+                (r"\bnumber bedrooms?\b", "bedrooms"),
+                (r"\bno of bedrooms?\b", "bedrooms"),
+                (r"\bsize of population\b", "population"),
+                (r"\bsize population\b", "population"),
+                (r"\bpopulation size\b", "population"),
+                (r"\bnumber of bathrooms?\b", "bathrooms"),
+                (r"\bnumber bathrooms?\b", "bathrooms"),
+                (r"\bno of bathrooms?\b", "bathrooms"),
+                (r"\bhouse location\b", "location"),
+                (r"\bproperty location\b", "location"),
+            ]
+            for pattern, repl in replacements:
+                p = re.sub(pattern, repl, p)
+            p = re.sub(r"\s+", " ", p).strip()
+            if p and p not in _STOP and p not in _NOISE:
+                canonical.append(p)
+        return canonical
+
+    for pattern in clause_patterns:
+        for match in re.finditer(pattern, normalized, flags=re.IGNORECASE):
+            params.extend(_canonicalize_param(match.group(1)))
+
+    if not params:
+        feature_terms = [
+            "location", "bedrooms", "bathrooms", "population", "rooms", "area",
+            "size", "income", "salary", "experience", "rating", "genre",
+        ]
+        for term in feature_terms:
+            if re.search(rf"\b{re.escape(term)}\b", normalized):
+                params.append(term)
+
     if not params:
         for tok in tokens:
             if _is_useful(tok):
                 params.append(tok)
+
     seen: set[str] = set()
     return [p for p in params if not (p in seen or seen.add(p))][:8]  # type: ignore[func-returns-value]
 
 
 def _extract_target(low: str, task_type: str) -> str:
+    for explicit_target in ("price", "salary", "income", "cost", "rent", "revenue", "rating", "score"):
+        if re.search(rf"\b{explicit_target}\b", low):
+            return explicit_target
     m = re.search(
         r"\b(predict|estimate|forecast|output|determine|classify)\s+([a-z0-9_ ]+)", low
     )
     if m:
-        cand = m.group(2).strip().split()[0]
-        if cand not in _NOISE and cand not in _STOP:
-            return cand
+        phrase = [tok for tok in m.group(2).strip().split() if tok not in _STOP and tok not in _NOISE]
+        for cand in reversed(phrase):
+            if cand not in _NOISE and cand not in _STOP:
+                return cand
     return {"regression": "price", "classification": "label",
             "clustering": "cluster", "chatbot": "response"}.get(task_type, "output")
 

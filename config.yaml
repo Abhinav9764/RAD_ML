@@ -1,87 +1,167 @@
 # =============================================================================
-# RAD-ML  —  Root Configuration  (v6)
+# RAD-ML v8
+# Sanitized repository configuration
 # =============================================================================
 
-kaggle:
-  username: "Abhinava1234"
-  key:      "KGAT_d688479ccf2de04626d9e28ffb3d4dde"
-
-uci:
-  enabled:  true
-  base_url: "https://archive.ics.uci.edu/api/datasets"
-
 aws:
-  region:            "us-east-1"
-  s3_bucket:         "rad-ml-datasets"
-  s3_prefix:         "collected_data"
-  sagemaker_role:    "arn:aws:iam::820648834328:role/raduser"
-  access_key_id:     "AKIA36ET3OUMBNMEBGII"
-  secret_access_key: "lNgd2DnwFxxQB/kafiNMHBtogWkoDkCFd3BfbB/a"
+  access_key_id: ""
+  secret_access_key: ""
+  region: "us-east-1"
+  s3_bucket: "your-rad-ml-bucket"
+  s3_prefix: "collected_data"
+  sagemaker_role: "arn:aws:iam::123456789012:role/YourSageMakerExecutionRole"
+  training_instance_type: "ml.m5.large"
+  endpoint_instance_type: "ml.m5.large"
+  sagemaker_training_job_name: "rad-ml-train-once"
+  sagemaker_model_name: "rad-ml-model"
+  sagemaker_endpoint_name: "rad-ml-endpoint"
 
-llm:
-  gemini_api_key: "AIzaSyBdXJ0aeWWjq4E36gBw-z3O-gZvpCzRIpI"
-  gemini_model:   "gemini-2.0-flash"
-  max_retries:    3
+gemini:
+  api_key: ""
+  model: "gemini-2.0-flash"
+  max_retries: 3
   timeout_seconds: 90
 
-collection:
-  max_kaggle_results: 10
-  max_uci_results:    10
-  max_openml_results: 8
-  max_hf_results:     8
-  min_row_threshold:  500
-  raw_data_dir:       "data/raw"
-  processed_data_dir: "data/processed"
+deepseek:
+  api_key: ""
+  model: "deepseek-coder"
+  temperature: 0.3
+  max_tokens: 4096
 
-scoring:
-  keyword_match_weight:  0.40
-  row_count_weight:      0.30
-  column_match_weight:   0.20
-  recency_weight:        0.10
+qwen:
+  hf_model: "Qwen/Qwen2.5-Coder-3B-Instruct"
+  hf_token: ""
+  ollama_model: "qwen2.5-coder:3b"
+  ollama_model_candidates:
+    - "qwen2.5-coder:3b"
+    - "deepseek-coder"
+    - "llama3.2:3b"
+  temperature: 0.3
+  max_tokens: 4096
 
-codegen:
-  max_fix_attempts:      5
-  workspace_dir:         "Code_Generator/RAD-ML/workspace/current_app"
-  flask_port:            7000
-  test_timeout_seconds:  30
+primary_llm: "qwen"
 
-sagemaker:
-  instance_type:         "ml.m5.large"
-  max_runtime_seconds:   3600
-  framework:             "xgboost"
-  framework_version:     "1.7-1"
-  output_path_prefix:    "models"
+kaggle:
+  username: ""
+  key: ""
+  max_results: 10
 
-storage:
-  db_path:      "data/rad_ml.db"
-  results_json: "Data_Collection_Agent/db_results.json"
-
-logging:
-  log_file:      "logs/rad_ml.log"
-  console_level: "INFO"
-  file_level:    "DEBUG"
-
-chatbot:
-  host:         "0.0.0.0"
-  port:         5001
-  debug:        false
-  cors_origins: ["http://localhost:5173", "http://localhost:3000"]
+uci:
+  enabled: true
+  base_url: "https://archive.ics.uci.edu/api/datasets"
 
 openml:
-  api_key: "693b4c38add0102e61020e061705abf0"
+  api_key: ""
   enabled: true
 
 huggingface:
   enabled: true
 
-auth:
-  sqlite_path:          "data/users.db"
-  jwt_secret_key:       "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_IN_PRODUCTION"
-  jwt_expires_hours:    24
-  google_client_id:     "844484455480-16hij80uqsdg2ob46fea6lpnhticjmbq.apps.googleusercontent.com"
-  google_client_secret: "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"
+ddg:
+  enabled: true
+  max_results: 10
+  timeout_secs: 8
+  min_doc_length: 100
+  max_doc_chars: 8000
+  max_snippet_chars: 1200
 
-mongodb:
-  uri:        "mongodb://localhost:27017"
-  db_name:    "radml"
-  collection: "chat_history"
+ddg_max_pages: 10
+
+collection:
+  max_kaggle_results: 10
+  max_uci_results: 10
+  max_openml_results: 8
+  max_hf_results: 8
+  min_row_threshold: 500
+  provider_search_timeout_secs: 10
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+
+scoring:
+  keyword_match_weight: 0.40
+  row_count_weight: 0.30
+  column_match_weight: 0.20
+  recency_weight: 0.10
+
+sagemaker:
+  instance_type: "ml.m5.large"
+  max_runtime_seconds: 3600
+  framework: "xgboost"
+  framework_version: "1.7-1"
+  output_path_prefix: "models"
+
+slm_model: "qwen:7b"
+
+vector_store:
+  backend: "chroma"
+  embedding_model: "all-MiniLM-L6-v2"
+  chunk_size: 1200
+  chunk_overlap: 150
+  min_chunk_chars: 120
+  persist_dir: "data/vector_store"
+
+chatbot_runtime:
+  use_slm: false
+  fallback_context_chars: 1200
+  fallback_max_sentences: 4
+  fallback_min_sentence_chars: 40
+  min_ddg_relevance: 0.12
+  min_docs_for_rag: 6
+  max_docs_for_rag: 24
+
+codegen:
+  max_fix_attempts: 5
+  workspace_dir: "Code_Generator/RAD-ML/workspace/current_app"
+  test_timeout_seconds: 60
+
+refinement:
+  max_retries: 5
+  test_timeout_secs: 60
+  app_start_timeout_secs: 300
+
+cost_control:
+  auto_shutdown_mins: 30
+  max_runtime_mins: 120
+  preferred_instance: "ml.m5.large"
+  enable_budget_alerts: true
+
+storage:
+  db_path: "data/rad_ml.db"
+  results_json: "Data_Collection_Agent/db_results.json"
+
+logging:
+  log_file: "logs/rad_ml.log"
+  console_level: "INFO"
+  file_level: "DEBUG"
+
+streamlit:
+  host: "127.0.0.1"
+  port: 8501
+  python_path: ""
+
+explainability:
+  timeout_seconds: 12
+  provider_timeout_seconds: 3
+  enable_ollama_fallback: false
+
+chatbot:
+  host: "0.0.0.0"
+  port: 5001
+  debug: false
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+
+auth:
+  sqlite_path: "Chatbot_Interface/backend/data/users.db"
+  jwt_secret_key: "change-this-to-a-long-random-secret-key"
+  jwt_expires_hours: 24
+  google_client_id: ""
+  google_client_secret: ""
+
+nosql:
+  provider: "dynamodb"
+  region: "us-east-1"
+  table_name: "radml-chat-history"
+  endpoint_url: ""
+  auto_create_table: true

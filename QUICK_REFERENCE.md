@@ -473,7 +473,6 @@ python -m pytest generated/test_model.py -v
 - [ ] Clone repo: `git clone ...`
 - [ ] Create config.yaml with at least valid jwt_secret_key
 - [ ] Install deps: `pip install -r requirements.txt`
-- [ ] Download spaCy: `python -m spacy download en_core_web_sm`
 - [ ] Install frontend deps: `cd Chatbot_Interface/frontend && npm install`
 - [ ] Start backend: `cd Chatbot_Interface/backend && python app.py`
 - [ ] Start frontend: `cd Chatbot_Interface/frontend && npm run dev`

@@ -250,3 +250,13 @@ htmlcov/
 .vscode/
 .idea/
 *.swp
+Chatbot_Interface/backend/data/raw/
+Chatbot_Interface/backend/data/processed/
+Chatbot_Interface/backend/data/uploads/
+Chatbot_Interface/backend/data/*.db
+Chatbot_Interface/backend/data/*.json
+Chatbot_Interface/backend/Data_Collection_Agent/db_results.json
+Chatbot_Interface/backend/Code_Generator/RAD-ML/workspace/current_app/
+Code_Generator/RAD-ML/workspace/current_app/
+Code_Generator/RAD-ML/workspace/logs/
+.env.example.local

@@ -10,7 +10,7 @@ Example output:
 {
   "task":         "movie recommendation system",
   "language":     "Python",
-  "framework":    "Flask",
+  "framework":    "Streamlit",
   "task_type":    "clustering",          # regression | classification | clustering
   "model_type":   "content-based filtering",
   "features":     ["genre", "language", "rating"],
@@ -49,7 +49,7 @@ AWS region      : {aws_region}
 Produce a JSON object with EXACTLY these keys:
 - "task"         : short task description (≤10 words)
 - "language"     : always "Python"
-- "framework"    : "Flask" (for web API)
+- "framework"    : "Streamlit"
 - "task_type"    : one of "regression", "classification", "clustering"
 - "model_type"   : brief ML model description
 - "features"     : list of the actual input feature column names from the dataset
@@ -112,7 +112,7 @@ class PromptUnderstandingLayer:
             spec.setdefault("endpoint_name", endpoint_name)
             spec.setdefault("aws_region",    aws_region)
             spec.setdefault("task_type",     parsed_spec.get("task_type", "regression"))
-            spec.setdefault("flask_port",    int(config.get("codegen", {}).get("flask_port", 7000)))
+            spec.setdefault("requested_features", parsed_spec.get("input_params", []))
             spec["feature_cols"] = feature_cols   # always use preprocessor's columns
             spec["target_col"]   = target_col
             logger.info("ProjectSpec built: task=%s  features=%d  deliverables=%d",
@@ -139,7 +139,7 @@ class PromptUnderstandingLayer:
         return {
             "task":          parsed_spec.get("raw", "ML prediction")[:60],
             "language":      "Python",
-            "framework":     "Flask",
+            "framework":     "Streamlit",
             "task_type":     task_type,
             "model_type":    {"regression": "XGBoost regressor",
                               "classification": "XGBoost classifier",
@@ -156,5 +156,5 @@ class PromptUnderstandingLayer:
             "coding_style":  "production",
             "endpoint_name": endpoint_name,
             "aws_region":    aws_region,
-            "flask_port":    int(config.get("codegen", {}).get("flask_port", 7000)),
+            "requested_features": parsed_spec.get("input_params", []),
         }

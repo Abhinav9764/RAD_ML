@@ -43,7 +43,7 @@ export default function Sidebar({ user, jobs, activeId, onSelect, onDelete, onDe
             }}>
               {user?.username || 'User'}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+            <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1 }}>
               {user?.email || 'Signed in'}
             </div>
           </div>
@@ -63,7 +63,7 @@ export default function Sidebar({ user, jobs, activeId, onSelect, onDelete, onDe
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{
             fontFamily: 'var(--font-mono)', fontSize: 10,
-            color: 'var(--text3)', letterSpacing: 1,
+            color: 'var(--text2)', letterSpacing: 1,
             textTransform: 'uppercase',
           }}>Chat History</span>
           {jobs.length > 0 && (
@@ -86,7 +86,7 @@ export default function Sidebar({ user, jobs, activeId, onSelect, onDelete, onDe
         {jobs.length === 0 ? (
           <div style={{ padding: '32px 16px', textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.3 }}>💬</div>
-            <div style={{ color: 'var(--text3)', fontSize: 12, lineHeight: 1.5 }}>
+            <div style={{ color: 'var(--text2)', fontSize: 12, lineHeight: 1.5 }}>
               No conversations yet.<br />Start by entering a prompt below.
             </div>
           </div>
@@ -109,7 +109,7 @@ export default function Sidebar({ user, jobs, activeId, onSelect, onDelete, onDe
       }}>
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 10,
-          color: 'var(--text3)', letterSpacing: 0.5,
+          color: 'var(--text2)', letterSpacing: 0.5,
         }}>RAD-ML v2.0</span>
         <span style={{
           width: 6, height: 6, borderRadius: '50%',
@@ -152,14 +152,14 @@ function HistoryItem({ job, active, onSelect, onDelete }) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 12.5, color: active ? 'var(--text)' : 'var(--text2)',
-          fontWeight: active ? 500 : 400,
+          fontSize: 12.5, color: active ? '#ffffff' : 'var(--text)',
+          fontWeight: active ? 600 : 500,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           lineHeight: 1.4,
         }}>
           {job.prompt || job.id || job.job_id}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
+        <div style={{ fontSize: 10.5, color: 'var(--text2)', marginTop: 3 }}>
           {st.label}
           {job.created && ` · ${_relTime(job.created)}`}
         </div>

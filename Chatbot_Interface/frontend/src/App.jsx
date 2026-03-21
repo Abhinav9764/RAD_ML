@@ -46,7 +46,16 @@ function ChatApp({ user, logout, getToken }) {
     loadHistory, selectJob, deleteJob, deleteAllHistory,
   } = usePipeline(getToken)
 
-  useEffect(() => { loadHistory() }, [])
+  useEffect(() => {
+    loadHistory()
+  }, [loadHistory, user?.id])
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      loadHistory()
+    }, 10000)
+    return () => clearInterval(intervalId)
+  }, [loadHistory])
 
   const hasActive = Boolean(activeJob)
   const isRunning = activeJob?.status === 'running' || activeJob?.status === 'queued'

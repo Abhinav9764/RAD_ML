@@ -142,9 +142,41 @@ class DataPreprocessor:
         cols_lower  = {c.lower(): c for c in df.columns if c != target_col}
         matched: list[str] = []
 
+        alias_groups = {
+            "location": ("location", "region", "city", "state", "area", "zip", "postal", "latitude", "longitude", "lat", "lon"),
+            "bedroom": ("bedroom", "bedrooms", "bed", "bedrm", "bedrms"),
+            "bathroom": ("bathroom", "bathrooms", "bath", "baths"),
+            "room": ("room", "rooms"),
+            "population": ("population", "pop"),
+            "price": ("price", "value", "cost", "sale"),
+        }
+
+        def _normalized_tokens(value: str) -> set[str]:
+            raw = str(value or "").lower().replace("_", " ")
+            tokens = set(raw.split())
+            squashed = raw.replace(" ", "")
+            tokens.add(squashed)
+            return {t for t in tokens if t}
+
+        def _hint_aliases(hint: str) -> set[str]:
+            hint_tokens = _normalized_tokens(hint)
+            aliases = set(hint_tokens)
+            for key, group in alias_groups.items():
+                if key in hint_tokens or any(term in hint_tokens for term in group):
+                    aliases.update(group)
+            if "location" in aliases:
+                aliases.update(alias_groups["location"])
+            return aliases
+
         for hint in input_hints:
+            aliases = _hint_aliases(hint)
             for c_low, c_orig in cols_lower.items():
-                if hint in c_low or c_low in hint:
+                normalized_col = c_low.replace("_", "")
+                if (
+                    hint in c_low
+                    or c_low in hint
+                    or any(alias in c_low or alias in normalized_col for alias in aliases)
+                ):
                     if c_orig not in matched:
                         matched.append(c_orig)
 
