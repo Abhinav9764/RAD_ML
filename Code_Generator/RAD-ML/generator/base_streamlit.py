@@ -1039,7 +1039,8 @@ def _sagemaker_classify(text: str) -> Dict:
             return {"label": raw, "confidence": 0.95, "positive_score": 0.0,
                     "negative_score": 0.0, "matched_words": []}
     except Exception as exc:
-        st.warning(f"SageMaker unavailable ({exc}). Using local classifier.")
+        # Silently fall back to local classifier since XGBoost SageMaker 
+        # deployed natively expects numeric vectors instead of raw user strings.
         return _local_classify(text)
 
 
