@@ -30,8 +30,15 @@ sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
 
-with open(ROOT / "config.yaml", encoding="utf-8") as f:
-    CFG = yaml.safe_load(f)
+_cfg_path = ROOT / "config.yaml"
+CFG = {}
+if _cfg_path.exists():
+    try:
+        with open(_cfg_path, encoding="utf-8") as f:
+            CFG = yaml.safe_load(f) or {}
+    except Exception:
+        CFG = {}
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
 
 # ── Page config & dark theme ─────────────────────────────────────────────────
 st.set_page_config(
@@ -194,10 +201,17 @@ ROOT = next(
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
-with open(ROOT / "config.yaml", encoding="utf-8") as f:
-    CFG = yaml.safe_load(f)
+_cfg_path = ROOT / "config.yaml"
+CFG = {}
+if _cfg_path.exists():
+    try:
+        with open(_cfg_path, encoding="utf-8") as f:
+            CFG = yaml.safe_load(f) or {}
+    except Exception:
+        CFG = {}
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
 
-# ── Page config & dark theme ─────────────────────────────────────────────────
+# ── Page config & high-contrast theme ─────────────────────────────────────────
 st.set_page_config(
     page_title="RAD-ML Predictor",
     page_icon="🔮",
@@ -207,23 +221,96 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-  [data-testid="stAppViewContainer"] { background: #0d0f1a; }
-  [data-testid="stSidebar"] { background: #12152a; border-right: 1px solid rgba(255,255,255,0.07); }
-  h1, h2, h3 { color: #e8eaf0 !important; }
-  .stCaption { color: #8a8fa8 !important; }
-  div[data-testid="stForm"] {
-    background: rgba(255,255,255,0.04);
-    border-radius: 14px;
-    padding: 1.5rem;
-    border: 1px solid rgba(255,255,255,0.08);
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+  /* ── App background ── */
+  [data-testid="stAppViewContainer"] {
+    background: linear-gradient(160deg, #0b0e1a 0%, #111827 100%);
   }
+
+  /* ── Sidebar overhaul ── */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1a2035 0%, #0f1629 100%) !important;
+    border-right: 2px solid #3b82f6 !important;
+  }
+  /* All sidebar text bright white */
+  [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
+  [data-testid="stSidebar"] .stCaption,
+  [data-testid="stSidebar"] .stMarkdown p { color: #cbd5e1 !important; font-size: 0.92rem !important; }
+  [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+    color: #ffffff !important; font-weight: 700 !important;
+  }
+  /* Sidebar info boxes */
+  [data-testid="stSidebar"] .element-container .stAlert {
+    background: rgba(59,130,246,0.15) !important;
+    border: 1px solid rgba(59,130,246,0.4) !important;
+    border-radius: 10px;
+  }
+
+  /* ── Main area headings ── */
+  h1 { color: #ffffff !important; font-weight: 800 !important; font-size: 2.2rem !important; }
+  h2 { color: #e2e8f0 !important; font-weight: 700 !important; }
+  h3 { color: #e2e8f0 !important; font-weight: 600 !important; }
+  p, .stMarkdown p { color: #cbd5e1 !important; }
+  .stCaption { color: #94a3b8 !important; font-size: 0.9rem !important; }
+
+  /* ── Form container ── */
+  div[data-testid="stForm"] {
+    background: rgba(59,130,246,0.06) !important;
+    border: 1px solid rgba(59,130,246,0.3) !important;
+    border-radius: 16px;
+    padding: 1.5rem 1.8rem;
+  }
+  [data-testid="stForm"] label {
+    color: #e2e8f0 !important; font-weight: 600 !important; font-size: 0.95rem !important;
+  }
+  .stTextInput > div > div > input {
+    color: #ffffff !important;
+    background-color: #1e2a42 !important;
+    border: 1.5px solid #3b82f6 !important;
+    border-radius: 10px !important;
+  }
+
+  /* ── Primary button ── */
+  .stButton > button[kind="primary"],
+  .stFormSubmitButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0.65rem 1.5rem !important;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.4) !important;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stButton > button[kind="primary"]:hover,
+  .stFormSubmitButton > button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 28px rgba(59,130,246,0.55) !important;
+  }
+
+  /* ── Prediction Result ── */
   .prediction-result {
     background: linear-gradient(135deg, rgba(62,207,255,0.12), rgba(124,106,247,0.12));
-    border: 1px solid rgba(62,207,255,0.35);
-    border-radius: 14px;
-    padding: 2rem;
+    border: 1px solid rgba(62,207,255,0.4);
+    border-radius: 16px;
+    padding: 2.5rem;
     text-align: center;
-    margin: 1rem 0;
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  
+  hr { border-color: rgba(59,130,246,0.2) !important; }
+  [data-testid="stSpinner"] p { color: #93c5fd !important; font-weight: 500; }
+  
+  /* Upload box */
+  [data-testid="stFileUploader"] {
+    background: rgba(255,255,255,0.05);
+    border: 1px dashed rgba(59,130,246,0.5);
+    border-radius: 14px;
+    padding: 1rem;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -263,16 +350,15 @@ def get_sm_runtime():
     except Exception:
         return None
 
-
 # ── Core logic (kept pure for unit-testability) ───────────────────────────────
 def _encode_feature(feature_name: str, value: str) -> str:
     """Strip units/symbols and encode a single feature value as a numeric string."""
     value = str(value).strip()
-    # Strip all non-numeric characters except decimal point (handles "200sq.ft", "$1,200", etc.)
+    # Strip all non-numeric characters except decimal point
     cleaned = re.sub(r"[^0-9.]", "", value)
 
-    if feature_name.lower() in ("region", "location", "area_name", "city", "state"):
-        # Ordinal hash encoding for categorical geo fields
+    if feature_name.lower() in ("region", "location", "area_name", "city", "state", "text", "description", "review"):
+        # Ordinal hash encoding for categorical fields
         return str(sum(ord(ch) for ch in value.lower()) % 1000)
 
     try:
@@ -345,31 +431,70 @@ def predict_record(record: Dict[str, str]) -> str:
 
 # ── Sidebar — model info ──────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🔮 RAD-ML Predictor")
-    st.caption("Local fallback inference" if MOCK_MODE else "SageMaker XGBoost Inference")
-    st.divider()
-    st.markdown("**Algorithm:** XGBoost (SageMaker Built-in)")
-    st.caption(f"Endpoint: `{ENDPOINT_NAME}`" if ENDPOINT_NAME else "Endpoint: local fallback")
-    st.caption(f"Region: `{AWS_REGION}`")
-    if MOCK_MODE:
-        st.info("Running in safe local mode because a live SageMaker endpoint is not available.")
-    st.divider()
+    st.markdown("""
+    <div style="text-align:center;padding:0.5rem 0 1rem 0;">
+      <div style="font-size:2.8rem;margin-bottom:0.3rem;">🔮</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#ffffff;letter-spacing:0.5px;">RAD-ML Predictor</div>
+      <div style="font-size:0.8rem;color:#93c5fd;margin-top:2px;">AI-Powered Inference Engine</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:0.5rem 0 1rem 0;">', unsafe_allow_html=True)
+    
+    mode_color  = "#f59e0b" if MOCK_MODE else "#10b981"
+    mode_label  = "Local Fallback" if MOCK_MODE else "SageMaker Live"
+    mode_icon   = "💻" if MOCK_MODE else "☁️"
+    
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;margin-bottom:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.6rem;">INFERENCE MODE</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.2rem;">{mode_icon}</span>
+        <span style="color:{mode_color};font-weight:700;font-size:0.95rem;">{mode_label}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.8rem;">MODEL SETTINGS</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Algorithm</span>
+        <span style="color:#60a5fa;font-weight:700;font-size:0.95rem;">XGBoost</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Features</span>
+        <span style="color:#a78bfa;font-weight:700;font-size:0.95rem;">{len(FEATURES)}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:1rem 0;">', unsafe_allow_html=True)
     st.markdown("**Metrics (benchmark)**")
-    st.metric("MAE", "—")
-    st.metric("RMSE", "—")
-    st.metric("R²", "—")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("MAE", "—")
+    c2.metric("RMSE", "—")
+    c3.metric("R²", "—")
     st.caption("Metrics update after first prediction batch.")
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
-st.title("🔮 RAD-ML Predictor")
-st.caption("Interactive ML inference via AWS SageMaker")
+st.markdown("""
+<div style="margin-bottom:1.5rem;">
+  <h1 style="margin-bottom:0.2rem;">🔮 RAD-ML Predictor</h1>
+  <p style="color:#93c5fd;font-size:1rem;margin:0;">Interactive ML inference via AWS SageMaker</p>
+</div>
+""", unsafe_allow_html=True)
 
 tab_single, tab_bulk = st.tabs(["📊 Single Predict", "📁 Bulk Predict"])
 
 # ── Tab 1: Single prediction ──────────────────────────────────────────────────
 with tab_single:
-    st.subheader("Enter Feature Values")
+    st.subheader("Enter Input Values")
 
     with st.form("single_predict_form"):
         cols = st.columns(2)
@@ -377,9 +502,13 @@ with tab_single:
         for idx, feat in enumerate(FEATURES):
             label = FEATURE_LABELS.get(feat, feat.replace("_", " ").title())
             with cols[idx % 2]:
-                inputs[feat] = st.text_input(label, key=f"single_{feat}", placeholder=f"Enter {label}")
+                if "text" in feat.lower() or "review" in feat.lower() or "description" in feat.lower():
+                    inputs[feat] = st.text_area(label, key=f"single_{feat}", placeholder=f"Enter {label}")
+                else:
+                    inputs[feat] = st.text_input(label, key=f"single_{feat}", placeholder=f"Enter {label}")
 
-        submitted = st.form_submit_button("🚀 Predict", use_container_width=True, type="primary")
+        st.markdown("<br/>", unsafe_allow_html=True)
+        submitted = st.form_submit_button("🚀 Run Prediction", use_container_width=True, type="primary")
 
     if submitted:
         ok, error_msg = validate_payload(inputs)
@@ -387,12 +516,12 @@ with tab_single:
             st.error(f"⚠️ {error_msg}")
         else:
             try:
-                with st.spinner("Running inference on SageMaker…"):
+                with st.spinner("🤖 Running inference…"):
                     prediction = predict_record(inputs)
                 st.markdown(
                     f'<div class="prediction-result">'
-                    f'<p style="color:#8a8fa8;font-size:0.85rem;text-transform:uppercase;letter-spacing:1px">Prediction Result</p>'
-                    f'<h1 style="font-size:3rem;background:linear-gradient(135deg,#3ecfff,#7c6af7);'
+                    f'<p style="color:#94a3b8;font-size:0.95rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Prediction Result</p>'
+                    f'<h1 style="font-size:3.5rem;font-weight:800;margin:0;background:linear-gradient(135deg,#60a5fa,#c084fc);'
                     f'-webkit-background-clip:text;-webkit-text-fill-color:transparent">{prediction}</h1>'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -423,6 +552,7 @@ with tab_bulk:
                     st.error(f"CSV is missing required columns: {', '.join(missing_cols)}")
                 else:
                     st.dataframe(df.head(20), use_container_width=True)
+                    st.markdown("<br/>", unsafe_allow_html=True)
                     if st.button("▶️ Run Bulk Prediction", type="primary"):
                         predictions = []
                         progress = st.progress(0, text="Running inference…")
@@ -458,12 +588,247 @@ if __name__ == "__main__":
 '''
 
 
+
+
+
 # ---------------------------------------------------------------------------
-# RECOMMENDATION — SageMaker Endpoint Streamlit App
+# RECOMMENDATION — Movie recommendation Streamlit App
 # ---------------------------------------------------------------------------
 STREAMLIT_APP_RECOMMENDATION = '''"""
-Recommendation System Streamlit app generated by RAD-ML.
-Returns top-N item recommendations via a SageMaker endpoint.
+Movie Recommendation Streamlit app generated by RAD-ML.
+Accepts genre (dropdown) and min-rating (slider) and returns a ranked list of movies.
+"""
+from __future__ import annotations
+import os, re, sys
+from pathlib import Path
+from typing import Dict, List
+
+import streamlit as st
+import yaml
+
+try:
+    import boto3
+except Exception:
+    boto3 = None  # type: ignore
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None  # type: ignore
+
+ROOT = next(
+    (p for p in Path(__file__).resolve().parents if (p / "config.yaml").exists()),
+    Path(__file__).resolve().parent,
+)
+sys.path.insert(0, str(ROOT))
+os.chdir(ROOT)
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
+
+_cfg_path = ROOT / "config.yaml"
+CFG: dict = {}
+if _cfg_path.exists():
+    try:
+        with open(_cfg_path, encoding="utf-8") as _f:
+            CFG = yaml.safe_load(_f) or {}
+    except Exception:
+        CFG = {}
+
+st.set_page_config(page_title="Movie Recommender", page_icon="🎬", layout="wide",
+                   initial_sidebar_state="expanded")
+
+st.markdown("""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  html,body,[class*="css"]{font-family:'Inter',sans-serif;}
+  [data-testid="stAppViewContainer"]{background:#0d0f1a;}
+  [data-testid="stSidebar"]{background:#12152a;border-right:1px solid rgba(255,255,255,.07);}
+  h1,h2,h3{color:#e8eaf0!important;}
+  .stCaption{color:#8a8fa8!important;}
+  .mcard{background:linear-gradient(135deg,rgba(62,207,255,.07),rgba(124,106,247,.07));
+         border:1px solid rgba(62,207,255,.18);border-radius:14px;
+         padding:1rem 1.4rem;margin-bottom:.8rem;}
+  .mcard:hover{border-color:rgba(62,207,255,.45);}
+  .mrank{font-size:1.1rem;font-weight:700;color:#3ecfff;}
+  .mtitle{font-size:1.05rem;font-weight:600;color:#e8eaf0;}
+  .mmeta{font-size:.82rem;color:#8a8fa8;margin-top:.2rem;}
+  .star{color:#f5c518;}
+  .gbadge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.75rem;
+          font-weight:600;background:rgba(124,106,247,.25);color:#c4b5fd;margin-right:4px;}
+  .noresult{background:rgba(255,100,100,.07);border:1px solid rgba(255,100,100,.2);
+            border-radius:12px;padding:2rem;text-align:center;color:#e8eaf0;}
+</style>""", unsafe_allow_html=True)
+
+ENDPOINT_NAME   = os.environ.get("SAGEMAKER_ENDPOINT", "rad-ml-endpoint")
+AWS_REGION      = CFG.get("aws", {}).get("region", "us-east-1")
+REMOTE_ENABLED  = os.environ.get("SAGEMAKER_REMOTE_ENABLED", "1") == "1"
+MOCK_MODE       = not REMOTE_ENABLED or os.environ.get("RADML_MOCK_MODE", "0") == "1"
+
+CATALOGUE: List[Dict] = [
+    {"title":"The Dark Knight",         "genre":"Action",    "rating":9.0,"year":2008,"desc":"Batman faces the Joker's reign of terror."},
+    {"title":"Inception",               "genre":"Sci-Fi",    "rating":8.8,"year":2010,"desc":"A thief who enters people's dreams."},
+    {"title":"Interstellar",            "genre":"Sci-Fi",    "rating":8.6,"year":2014,"desc":"Explorers travel through a wormhole in space."},
+    {"title":"The Avengers",            "genre":"Action",    "rating":8.0,"year":2012,"desc":"Earth's mightiest heroes unite."},
+    {"title":"John Wick",               "genre":"Action",    "rating":7.4,"year":2014,"desc":"A retired hitman seeks vengeance."},
+    {"title":"The Matrix",              "genre":"Sci-Fi",    "rating":8.7,"year":1999,"desc":"A hacker discovers reality is a simulation."},
+    {"title":"Mad Max: Fury Road",      "genre":"Action",    "rating":8.1,"year":2015,"desc":"Post-apocalyptic high-speed chase."},
+    {"title":"Gravity",                 "genre":"Sci-Fi",    "rating":7.7,"year":2013,"desc":"Two astronauts stranded in outer space."},
+    {"title":"Top Gun: Maverick",       "genre":"Action",    "rating":8.3,"year":2022,"desc":"Naval aviator returns for a dangerous mission."},
+    {"title":"Avatar",                  "genre":"Sci-Fi",    "rating":7.9,"year":2009,"desc":"A paralysed marine on the planet Pandora."},
+    {"title":"The Shawshank Redemption","genre":"Drama",     "rating":9.3,"year":1994,"desc":"Two imprisoned men bond over years."},
+    {"title":"Forrest Gump",            "genre":"Drama",     "rating":8.8,"year":1994,"desc":"Life of a man with a low IQ but good heart."},
+    {"title":"Schindler's List",        "genre":"Drama",     "rating":9.0,"year":1993,"desc":"A businessman saves Jewish lives in WWII."},
+    {"title":"The Pursuit of Happyness","genre":"Drama",     "rating":8.0,"year":2006,"desc":"A struggling salesman fights for his son."},
+    {"title":"Good Will Hunting",       "genre":"Drama",     "rating":8.3,"year":1997,"desc":"A janitor is secretly a math genius."},
+    {"title":"Whiplash",                "genre":"Drama",     "rating":8.5,"year":2014,"desc":"A jazz student pushed to his limits."},
+    {"title":"12 Angry Men",            "genre":"Drama",     "rating":8.9,"year":1957,"desc":"Jury deliberation for a murder case."},
+    {"title":"The Hangover",            "genre":"Comedy",    "rating":7.7,"year":2009,"desc":"Three friends wake up with no memory of a bachelor party."},
+    {"title":"Groundhog Day",           "genre":"Comedy",    "rating":8.0,"year":1993,"desc":"A man relives the same day over and over."},
+    {"title":"The Grand Budapest Hotel","genre":"Comedy",    "rating":8.1,"year":2014,"desc":"Adventures of a legendary hotel concierge."},
+    {"title":"Home Alone",              "genre":"Comedy",    "rating":7.7,"year":1990,"desc":"A boy is accidentally left home alone."},
+    {"title":"Superbad",                "genre":"Comedy",    "rating":7.6,"year":2007,"desc":"Two co-dependent high-schoolers on a wild night."},
+    {"title":"The Conjuring",           "genre":"Horror",    "rating":7.5,"year":2013,"desc":"Paranormal investigators fight a dark presence."},
+    {"title":"Get Out",                 "genre":"Horror",    "rating":7.7,"year":2017,"desc":"A man uncovers a disturbing secret."},
+    {"title":"A Quiet Place",           "genre":"Horror",    "rating":7.5,"year":2018,"desc":"A family survives in silence to avoid creatures."},
+    {"title":"Hereditary",              "genre":"Horror",    "rating":7.3,"year":2018,"desc":"A family haunted after a grandmother's death."},
+    {"title":"The Silence of the Lambs","genre":"Thriller",  "rating":8.6,"year":1991,"desc":"FBI trainee seeks a cannibalistic killer's help."},
+    {"title":"Se7en",                   "genre":"Thriller",  "rating":8.6,"year":1995,"desc":"Two detectives hunt a serial killer."},
+    {"title":"Gone Girl",               "genre":"Thriller",  "rating":8.1,"year":2014,"desc":"A woman disappears on her anniversary."},
+    {"title":"Parasite",                "genre":"Thriller",  "rating":8.5,"year":2019,"desc":"A poor family infiltrates a wealthy household."},
+    {"title":"The Notebook",            "genre":"Romance",   "rating":7.8,"year":2004,"desc":"Two young lovers from different worlds."},
+    {"title":"Pride & Prejudice",       "genre":"Romance",   "rating":7.8,"year":2005,"desc":"Romance between Elizabeth Bennet and Mr Darcy."},
+    {"title":"La La Land",              "genre":"Romance",   "rating":8.0,"year":2016,"desc":"A musician and actress fall in love in LA."},
+    {"title":"Titanic",                 "genre":"Romance",   "rating":7.9,"year":1997,"desc":"A love story aboard the ill-fated ship."},
+    {"title":"The Lord of the Rings",   "genre":"Fantasy",   "rating":8.9,"year":2001,"desc":"A hobbit carries a powerful ring on an epic quest."},
+    {"title":"Harry Potter",            "genre":"Fantasy",   "rating":7.6,"year":2001,"desc":"A young wizard embarks on magical adventures."},
+    {"title":"Gladiator",               "genre":"Fantasy",   "rating":8.5,"year":2000,"desc":"A Roman general becomes a slave gladiator."},
+    {"title":"Coco",                    "genre":"Animation", "rating":8.4,"year":2017,"desc":"A boy travels to the Land of the Dead."},
+    {"title":"Spirited Away",           "genre":"Animation", "rating":8.6,"year":2001,"desc":"A girl moves to a spirit world."},
+    {"title":"The Lion King",           "genre":"Animation", "rating":8.5,"year":1994,"desc":"A lion cub's journey to become king."},
+    {"title":"Up",                      "genre":"Animation", "rating":8.2,"year":2009,"desc":"An elderly man flies his house using balloons."},
+    {"title":"Goodfellas",              "genre":"Crime",     "rating":8.7,"year":1990,"desc":"Rise and fall of a mob associate."},
+    {"title":"The Godfather",           "genre":"Crime",     "rating":9.2,"year":1972,"desc":"The powerful Corleone crime family."},
+    {"title":"Heat",                    "genre":"Crime",     "rating":8.2,"year":1995,"desc":"A detective tracks a brilliant thief."},
+    {"title":"City of God",             "genre":"Crime",     "rating":8.6,"year":2002,"desc":"Youth gangs in Rio de Janeiro."},
+]
+
+ALL_GENRES = sorted({m["genre"] for m in CATALOGUE})
+
+
+def _local_recommend(genre: str, min_rating: float, top_n: int) -> List[Dict]:
+    gl = genre.lower()
+    filtered = [m for m in CATALOGUE if (gl == "all" or m["genre"].lower() == gl) and m["rating"] >= min_rating]
+    ranked = sorted(filtered, key=lambda m: m["rating"], reverse=True)[:top_n]
+    return [{"rank": i + 1, **m} for i, m in enumerate(ranked)]
+
+
+def get_recommendations(genre: str, min_rating: float, top_n: int) -> List[Dict]:
+    if not boto3 or MOCK_MODE:
+        return _local_recommend(genre, min_rating, top_n)
+    try:
+        sm = boto3.client("sagemaker-runtime", region_name=AWS_REGION)
+        payload = f"{sum(ord(c) for c in genre.lower()) % 1000},{min_rating}"
+        raw = sm.invoke_endpoint(EndpointName=ENDPOINT_NAME, ContentType="text/csv", Body=payload)
+        titles = [t.strip() for t in raw["Body"].read().decode().split(",") if t.strip()]
+        if titles:
+            return [{"rank": i+1, "title": t, "genre": genre, "rating": "—", "year": "—", "desc": ""}
+                    for i, t in enumerate(titles[:top_n])]
+    except Exception:
+        pass
+    return _local_recommend(genre, min_rating, top_n)
+
+
+def _stars(r) -> str:
+    try:
+        v = float(r); full = int(v / 2)
+        return "★" * full + "☆" * (5 - full) + f"  {v:.1f}/10"
+    except Exception:
+        return str(r)
+
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## 🎬 Movie Recommender")
+    st.caption("Powered by RAD-ML + curated catalogue")
+    st.divider()
+    top_n = st.slider("Number of movies", 3, 20, 10)
+    st.divider()
+    st.caption(f"**Mode:** {'🟡 Local catalogue' if MOCK_MODE else '🟢 SageMaker'}")
+    st.caption(f"**Catalogue:** {len(CATALOGUE)} movies | {len(ALL_GENRES)} genres")
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+st.title("🎬 Movie Recommendation Engine")
+st.caption("Choose a genre and minimum rating — we'll find the best movies for you.")
+
+with st.form("rec_form"):
+    c1, c2, c3 = st.columns([2, 2, 1], gap="medium")
+    with c1:
+        genre_sel = st.selectbox("🎭 Genre", ["All"] + ALL_GENRES, index=0,
+                                 help="Pick the genre you enjoy most.")
+    with c2:
+        min_rat = st.slider("⭐ Minimum Rating", 0.0, 10.0, 7.0, 0.5,
+                            help="Show only movies rated ≥ this value out of 10.")
+    with c3:
+        st.markdown("<br/>", unsafe_allow_html=True)
+        go = st.form_submit_button("🎬 Recommend", use_container_width=True, type="primary")
+
+st.divider()
+
+if go:
+    with st.spinner("Fetching recommendations…"):
+        recs = get_recommendations(genre_sel, min_rat, top_n)
+
+    if not recs:
+        st.markdown(
+            f'<div class="noresult"><h3>😕 No matches found</h3>'
+            f'<p>No <strong>{genre_sel}</strong> movies with rating ≥ {min_rat}.<br>'
+            f'Try lowering the minimum rating or selecting a different genre.</p></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"### 🏆 Top {len(recs)} Results"
+            f'<span style="color:#8a8fa8;font-size:.9rem;margin-left:.8rem;">'
+            f'Genre: <strong style="color:#c4b5fd">{genre_sel}</strong> &nbsp;|&nbsp; '
+            f'Min Rating: <strong style="color:#f5c518">{min_rat}</strong></span>',
+            unsafe_allow_html=True,
+        )
+        cols = st.columns(2)
+        for i, m in enumerate(recs):
+            with cols[i % 2]:
+                st.markdown(
+                    f'<div class="mcard">'
+                    f'<span class="mrank">#{m["rank"]}</span>&nbsp;&nbsp;'
+                    f'<span class="mtitle">{m["title"]}</span>'
+                    f'<div class="mmeta"><span class="gbadge">{m["genre"]}</span>'
+                    f'&nbsp;{m.get("year","")} &nbsp;|&nbsp;'
+                    f'<span class="star">{_stars(m["rating"])}</span></div>'
+                    f'<div class="mmeta" style="margin-top:.35rem;color:#b0b5cc;">{m.get("desc","")}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        if pd is not None:
+            edf = pd.DataFrame(recs)[["rank","title","genre","rating","year"]]
+            st.download_button("⬇️ Download CSV", edf.to_csv(index=False).encode(),
+                               "movie_recs.csv", "text/csv")
+else:
+    st.markdown(
+        '<div style="text-align:center;padding:3rem;color:#8a8fa8;">'
+        '<div style="font-size:3rem">🎬</div>'
+        '<h3 style="color:#8a8fa8;">Select a genre and rating above, then click Recommend</h3>'
+        '</div>', unsafe_allow_html=True,
+    )
+
+if __name__ == "__main__":
+    pass
+'''
+
+
+# ---------------------------------------------------------------------------
+# TEXT CLASSIFICATION — Sentiment / Topic text classifier Streamlit App
+# ---------------------------------------------------------------------------
+STREAMLIT_APP_TEXT_CLASSIFICATION = '''"""
+Text Classification Streamlit app generated by RAD-ML.
+Accepts a sentence/paragraph and predicts its class (e.g. Positive / Negative).
 """
 from __future__ import annotations
 
@@ -492,154 +857,331 @@ ROOT = next(
 )
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
+
+_cfg_path = ROOT / "config.yaml"
+CFG = {}
+if _cfg_path.exists():
+    try:
+        with open(_cfg_path, encoding="utf-8") as f:
+            CFG = yaml.safe_load(f) or {}
+    except Exception:
+        CFG = {}
 os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
 
-with open(ROOT / "config.yaml", encoding="utf-8") as f:
-    CFG = yaml.safe_load(f)
-
+# ── Page config & high-contrast theme ─────────────────────────────────────────
 st.set_page_config(
-    page_title="RAD-ML Recommender",
-    page_icon="🎯",
+    page_title="RAD-ML Text Classifier",
+    page_icon="📝",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
-  [data-testid="stAppViewContainer"] { background: #0d0f1a; }
-  [data-testid="stSidebar"] { background: #12152a; border-right: 1px solid rgba(255,255,255,0.07); }
-  h1, h2, h3 { color: #e8eaf0 !important; }
-  .stCaption { color: #8a8fa8 !important; }
-  .rec-card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-    margin-bottom: 0.75rem;
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+  /* ── App background ── */
+  [data-testid="stAppViewContainer"] {
+    background: linear-gradient(160deg, #0b0e1a 0%, #111827 100%);
   }
+
+  /* ── Sidebar ── */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1a2035 0%, #0f1629 100%) !important;
+    border-right: 2px solid #3b82f6 !important;
+  }
+  [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
+  [data-testid="stSidebar"] .stCaption,
+  [data-testid="stSidebar"] .stMarkdown p { color: #cbd5e1 !important; font-size: 0.92rem !important; }
+  [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+    color: #ffffff !important; font-weight: 700 !important;
+  }
+
+  /* ── Main headings ── */
+  h1 { color: #ffffff !important; font-weight: 800 !important; font-size: 2.2rem !important; }
+  h2 { color: #e2e8f0 !important; font-weight: 700 !important; }
+  h3 { color: #e2e8f0 !important; font-weight: 600 !important; }
+  p, .stMarkdown p { color: #cbd5e1 !important; }
+  .stCaption { color: #94a3b8 !important; }
+
+  /* ── Text area ── */
+  .stTextArea > div > div > textarea {
+    color: #ffffff !important;
+    background-color: #1e2a42 !important;
+    border: 1.5px solid #3b82f6 !important;
+    border-radius: 10px !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    min-height: 140px !important;
+  }
+  .stTextArea label { color: #e2e8f0 !important; font-weight: 600 !important; }
+
+  /* ── Primary button ── */
+  .stButton > button[kind="primary"],
+  .stFormSubmitButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+    color: #ffffff !important; font-weight: 700 !important; font-size: 1rem !important;
+    border: none !important; border-radius: 10px !important;
+    padding: 0.65rem 1.5rem !important;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.4) !important;
+  }
+  .stButton > button[kind="primary"]:hover,
+  .stFormSubmitButton > button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 28px rgba(59,130,246,0.55) !important;
+  }
+
+  /* ── Result cards ── */
+  .result-card {
+    border-radius: 16px; padding: 2.5rem; text-align: center;
+    margin: 1.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  .result-positive {
+    background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(52,211,153,0.08));
+    border: 1.5px solid rgba(16,185,129,0.5);
+  }
+  .result-negative {
+    background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(248,113,113,0.08));
+    border: 1.5px solid rgba(239,68,68,0.5);
+  }
+  .result-neutral {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(124,106,247,0.12));
+    border: 1.5px solid rgba(59,130,246,0.4);
+  }
+
+  hr { border-color: rgba(59,130,246,0.2) !important; }
+  [data-testid="stSpinner"] p { color: #93c5fd !important; font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── Config ────────────────────────────────────────────────────────────────────
 ENDPOINT_NAME = os.environ.get(
     "SAGEMAKER_ENDPOINT",
     CFG.get("aws", {}).get("sagemaker_endpoint_name", "rad-ml-endpoint"),
 )
 AWS_REGION = CFG.get("aws", {}).get("region", "us-east-1")
-FEATURES: List[str] = list(CFG.get("ml_features", [])) or ["user_id", "item_id"]
-TOP_N = 10
+REMOTE_INFERENCE_ENABLED = os.environ.get("SAGEMAKER_REMOTE_ENABLED", "0") == "1"
+MOCK_MODE = os.environ.get("RADML_MOCK_MODE", "0") == "1" or not REMOTE_INFERENCE_ENABLED
 
-def get_sm_runtime():
-    """Create the SageMaker runtime client lazily to avoid startup stalls."""
-    if not boto3:
-        return None
+CLASS_LABELS: List[str] = list(CFG.get("class_labels", [])) or ["Positive", "Negative"]
+
+# ── Keyword-based local fallback classifier ───────────────────────────────────
+_POSITIVE_WORDS = {
+    "good", "great", "excellent", "amazing", "wonderful", "fantastic", "love",
+    "happy", "joy", "beautiful", "brilliant", "awesome", "best", "perfect",
+    "enjoy", "liked", "nice", "superb", "delightful", "impressive", "outstanding",
+    "recommend", "pleased", "satisfied", "fun", "exciting", "incredible",
+    "fabulous", "magnificent", "positive", "terrific", "marvelous", "cheerful",
+}
+_NEGATIVE_WORDS = {
+    "bad", "terrible", "horrible", "awful", "worst", "hate", "boring",
+    "ugly", "poor", "disappointing", "disgusting", "annoying", "sad",
+    "angry", "waste", "useless", "dull", "mediocre", "pathetic",
+    "failed", "broken", "negative", "dislike", "unpleasant", "frustrating",
+    "dreadful", "inferior", "lousy", "miserable", "painful", "regret",
+}
+
+
+def _local_classify(text: str) -> Dict:
+    """Simple keyword sentiment classifier as local fallback."""
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    pos_hits = words & _POSITIVE_WORDS
+    neg_hits = words & _NEGATIVE_WORDS
+    pos_count = len(pos_hits)
+    neg_count = len(neg_hits)
+    total = pos_count + neg_count
+
+    if total == 0:
+        return {"label": "Neutral", "confidence": 0.50, "positive_score": 0.5,
+                "negative_score": 0.5, "matched_words": []}
+
+    pos_score = pos_count / total
+    neg_score = neg_count / total
+
+    if pos_score > neg_score:
+        label = "Positive"
+        confidence = round(0.5 + (pos_score - neg_score) * 0.5, 3)
+    elif neg_score > pos_score:
+        label = "Negative"
+        confidence = round(0.5 + (neg_score - pos_score) * 0.5, 3)
+    else:
+        label = "Neutral"
+        confidence = 0.50
+
+    matched = sorted(pos_hits | neg_hits)
+    return {"label": label, "confidence": confidence, "positive_score": round(pos_score, 3),
+            "negative_score": round(neg_score, 3), "matched_words": matched}
+
+
+def _sagemaker_classify(text: str) -> Dict:
+    """Call SageMaker endpoint for classification."""
     try:
-        return boto3.client("sagemaker-runtime", region_name=AWS_REGION)
-    except Exception:
-        return None
-
-
-def _encode_feature(feature_name: str, value: str) -> str:
-    value = str(value).strip()
-    cleaned = re.sub(r"[^0-9.]", "", value)
-    try:
-        return str(float(cleaned)) if cleaned else str(sum(ord(ch) for ch in value.lower()) % 1000)
-    except ValueError:
-        return str(sum(ord(ch) for ch in value.lower()) % 1000)
-
-
-def validate_payload(payload: Dict[str, str]) -> Tuple[bool, str]:
-    missing = [f for f in FEATURES if not str(payload.get(f, "")).strip()]
-    if missing:
-        return False, f"Missing required fields: {', '.join(missing)}"
-    return True, ""
-
-
-def get_recommendations(record: Dict[str, str], top_n: int = TOP_N) -> List[Dict]:
-    encoded = [_encode_feature(f, record.get(f, "")) for f in FEATURES]
-    payload_str = ",".join(encoded)
-    sm_runtime = get_sm_runtime()
-
-    if sm_runtime is None:
-        # Fallback: dummy recommendations
-        return [
-            {"rank": i + 1, "item": f"Item-{1000 + i}", "score": round(0.95 - i * 0.05, 2)}
-            for i in range(top_n)
-        ]
-    try:
-        response = sm_runtime.invoke_endpoint(
+        client = boto3.client("sagemaker-runtime", region_name=AWS_REGION)
+        response = client.invoke_endpoint(
             EndpointName=ENDPOINT_NAME,
             ContentType="text/csv",
-            Body=payload_str,
+            Body=text,
         )
         raw = response["Body"].read().decode("utf-8").strip()
-        items = raw.split(",")
-        return [
-            {"rank": i + 1, "item": item.strip(), "score": round(1.0 - i * 0.05, 2)}
-            for i, item in enumerate(items[:top_n])
-        ]
+        # Try to parse as a label or probability
+        try:
+            prob = float(raw)
+            if prob >= 0.5:
+                return {"label": "Positive", "confidence": round(prob, 3),
+                        "positive_score": round(prob, 3), "negative_score": round(1 - prob, 3),
+                        "matched_words": []}
+            else:
+                return {"label": "Negative", "confidence": round(1 - prob, 3),
+                        "positive_score": round(prob, 3), "negative_score": round(1 - prob, 3),
+                        "matched_words": []}
+        except ValueError:
+            return {"label": raw, "confidence": 0.95, "positive_score": 0.0,
+                    "negative_score": 0.0, "matched_words": []}
     except Exception as exc:
-        raise RuntimeError(f"SageMaker endpoint error: {exc}") from exc
+        st.warning(f"SageMaker unavailable ({exc}). Using local classifier.")
+        return _local_classify(text)
+
+
+def classify_text(text: str) -> Dict:
+    """Main classify dispatcher."""
+    if MOCK_MODE or not boto3:
+        return _local_classify(text)
+    return _sagemaker_classify(text)
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🎯 RAD-ML Recommender")
-    st.caption("Collaborative Filtering via SageMaker")
-    st.divider()
-    top_n = st.slider("Top-N recommendations", min_value=1, max_value=50, value=10)
-    st.divider()
-    st.caption(f"Endpoint: `{ENDPOINT_NAME}`")
-    st.caption(f"Region: `{AWS_REGION}`")
-    st.caption("**Algorithm:** SageMaker FM / KNN")
+    st.markdown("""
+    <div style="text-align:center;padding:0.5rem 0 1rem 0;">
+      <div style="font-size:2.8rem;margin-bottom:0.3rem;">📝</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#ffffff;letter-spacing:0.5px;">Text Classifier</div>
+      <div style="font-size:0.8rem;color:#93c5fd;margin-top:2px;">Powered by RAD-ML</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-st.title("🎯 RAD-ML Recommender")
-st.caption("Top-N item recommendations powered by AWS SageMaker")
+    st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:0.5rem 0 1rem 0;">', unsafe_allow_html=True)
 
-col_inputs, col_results = st.columns([1, 2], gap="large")
+    mode_color = "#f59e0b" if MOCK_MODE else "#10b981"
+    mode_label = "Local Classifier" if MOCK_MODE else "SageMaker Live"
+    mode_icon  = "💻" if MOCK_MODE else "☁️"
 
-with col_inputs:
-    st.subheader("Query Inputs")
-    with st.form("recommend_form"):
-        inputs: Dict[str, str] = {}
-        for feat in FEATURES:
-            label = feat.replace("_", " ").title()
-            inputs[feat] = st.text_input(label, placeholder=f"Enter {label}")
-        submitted = st.form_submit_button("🎯 Get Recommendations", use_container_width=True, type="primary")
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;margin-bottom:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.6rem;">INFERENCE MODE</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.2rem;">{mode_icon}</span>
+        <span style="color:{mode_color};font-weight:700;font-size:0.95rem;">{mode_label}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with col_results:
-    st.subheader(f"Top-{top_n} Recommendations")
-    if submitted:
-        ok, error_msg = validate_payload(inputs)
-        if not ok:
-            st.error(f"⚠️ {error_msg}")
-        else:
-            try:
-                with st.spinner("Fetching recommendations…"):
-                    recs = get_recommendations(inputs, top_n=top_n)
-                for rec in recs:
-                    st.markdown(
-                        f'<div class="rec-card">'
-                        f'<strong>#{rec["rank"]}</strong> — {rec["item"]} '
-                        f'<span style="float:right;color:#3ecfff">Score: {rec["score"]}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                if pd is not None:
-                    rec_df = pd.DataFrame(recs)
-                    csv_bytes = rec_df.to_csv(index=False).encode("utf-8")
-                    st.download_button(
-                        "⬇️ Download Recommendations",
-                        data=csv_bytes,
-                        file_name="recommendations.csv",
-                        mime="text/csv",
-                    )
-            except Exception as exc:
-                st.error(f"Recommendation failed: {exc}")
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.8rem;">MODEL INFO</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Task</span>
+        <span style="color:#60a5fa;font-weight:700;font-size:0.88rem;">Text Classification</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Classes</span>
+        <span style="color:#a78bfa;font-weight:700;font-size:0.88rem;">{len(CLASS_LABELS)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Labels</span>
+        <span style="color:#34d399;font-weight:700;font-size:0.88rem;">{", ".join(CLASS_LABELS)}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:1rem 0;">', unsafe_allow_html=True)
+    st.markdown("**How it works**")
+    st.caption(
+        "Enter any sentence or paragraph below. "
+        "The model will classify it as **Positive** or **Negative** "
+        "(or another label depending on the dataset)."
+    )
+
+
+# ── Main area ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="margin-bottom:1.5rem;">
+  <h1 style="margin-bottom:0.2rem;">📝 Text Classification</h1>
+  <p style="color:#93c5fd;font-size:1rem;margin:0;">Enter text below and let AI classify its sentiment</p>
+</div>
+""", unsafe_allow_html=True)
+
+user_text = st.text_area(
+    "✍️ Enter your text here",
+    placeholder="Type or paste a sentence, review, or paragraph...",
+    height=160,
+    key="text_input",
+)
+
+col_btn, col_clear = st.columns([3, 1])
+with col_btn:
+    classify_btn = st.button("🔍 Classify Text", use_container_width=True, type="primary")
+with col_clear:
+    clear_btn = st.button("🗑️ Clear", use_container_width=True)
+
+if classify_btn:
+    text = (user_text or "").strip()
+    if not text:
+        st.error("⚠️ Please enter some text to classify.")
     else:
-        st.info("Fill in the input fields and click **Get Recommendations**.")
+        with st.spinner("🤖 Analyzing text…"):
+            result = classify_text(text)
+
+        label = result["label"]
+        conf = result["confidence"]
+        pos_sc = result.get("positive_score", 0)
+        neg_sc = result.get("negative_score", 0)
+        matched = result.get("matched_words", [])
+
+        # Pick card class
+        if "positive" in label.lower():
+            card_cls = "result-positive"
+            emoji = "😊"
+            label_color = "#10b981"
+        elif "negative" in label.lower():
+            card_cls = "result-negative"
+            emoji = "😞"
+            label_color = "#ef4444"
+        else:
+            card_cls = "result-neutral"
+            emoji = "😐"
+            label_color = "#60a5fa"
+
+        st.markdown(
+            f'<div class="result-card {card_cls}">'
+            f'<div style="font-size:3.5rem;margin-bottom:0.5rem;">{emoji}</div>'
+            f'<p style="color:#94a3b8;font-size:0.9rem;font-weight:600;text-transform:uppercase;'
+            f'letter-spacing:1.5px;margin-bottom:8px;">Classification Result</p>'
+            f'<h1 style="font-size:2.8rem;font-weight:800;color:{label_color};margin:0;">{label}</h1>'
+            f'<p style="color:#cbd5e1;font-size:1.1rem;margin-top:0.5rem;">Confidence: <strong style="color:#ffffff;">{conf * 100:.1f}%</strong></p>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Positive Score", f"{pos_sc * 100:.1f}%")
+        c2.metric("Negative Score", f"{neg_sc * 100:.1f}%")
+        c3.metric("Confidence", f"{conf * 100:.1f}%")
+
+        if matched:
+            st.markdown("**Matched keywords:** " + ", ".join(f"`{w}`" for w in matched))
+
+        with st.expander("📊 Full Details"):
+            st.json(result)
+            st.markdown(f"**Input text:**\\n> {text}")
 
 
 if __name__ == "__main__":
-    pass
+    pass  # Launched via: streamlit run app.py
 '''

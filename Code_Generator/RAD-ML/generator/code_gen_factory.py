@@ -73,22 +73,27 @@ class CodeGenFactory:
         temp = self._get_temperature(llm_key)
         full_resp = self._call_llm(llm_key, system_prompt, task_prompt, temp)
 
+        features: List[str] = engine_meta.get("features", [])
+
         try:
             bundle = self._parse_json_response(full_resp)
         except Exception as exc:
             log.warning("Failed to parse LLM output as JSON (%s). Using stub.", exc)
-            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+            bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
 
         python_code = bundle.get("python", "")
         if not python_code.strip():
             log.warning("Generated bundle missing python code. Using stub.")
-            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+            bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
         elif not self._is_streamlit_python(python_code):
             log.warning("Generated code is not valid Streamlit. Using stub.")
-            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+            bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
         elif not self._matches_expected_mode(python_code, mode):
             log.warning("Generated code does not match mode '%s'. Using stub.", mode)
-            bundle = self._parse_json_response(self._stub_bundle_json(mode))
+            bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
+        elif not self._validate_prompt_alignment(python_code, user_prompt, features):
+            log.warning("Generated code does not align with prompt. Using contextual stub.")
+            bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
 
         # Ensure html/css are always empty — Streamlit handles its own UI
         bundle["html"] = ""
@@ -100,6 +105,7 @@ class CodeGenFactory:
             len(bundle.get("tests", "")),
         )
         return bundle
+
 
     def write_to_workspace(self, bundle: CodeBundle, app_dir: Path = WORKSPACE_APP_DIR) -> None:
         """
@@ -565,37 +571,97 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
         )
 
     # ── Offline Stub ──────────────────────────────────────────────────────────
-    def _stub_bundle_json(self, mode: str) -> str:
+    def _stub_bundle_json(self, mode: str, user_prompt: str = "") -> str:
         from generator.base_streamlit import (
             STREAMLIT_APP_CHATBOT,
             STREAMLIT_APP_ML,
             STREAMLIT_APP_RECOMMENDATION,
+            STREAMLIT_APP_TEXT_CLASSIFICATION,
         )
 
         template_map = {
             "chatbot": STREAMLIT_APP_CHATBOT,
             "recommendation": STREAMLIT_APP_RECOMMENDATION,
+            "text_classification": STREAMLIT_APP_TEXT_CLASSIFICATION,
         }
         python_code = template_map.get(mode, STREAMLIT_APP_ML)
 
-        # Patch FEATURES and ENDPOINT_NAME into the ML template when metadata is available
-        if mode == "ml" and self._current_engine_meta:
-            features = self._current_engine_meta.get("features", [])
-            endpoint = self._current_engine_meta.get("endpoint", "rad-ml-endpoint")
+        # ── Patch FEATURES list using a reliable literal replacement ─────────
+        if mode in ("ml", "recommendation") and self._current_engine_meta:
+            features: List[str] = self._current_engine_meta.get("features", [])
+            endpoint: str = self._current_engine_meta.get("endpoint", "rad-ml-endpoint")
+
             if features:
-                features_str = "[\n" + ",\n".join(f'    "{f}"' for f in features) + "\n]"
-                python_code = re.sub(
-                    r'FEATURES[:\s]*List\[str\]\s*=\s*list\(CFG\.get\("ml_features",\s*\[\]\)\)\s*or\s*\[.*?\]',
-                    f'FEATURES: List[str] = {features_str}',
-                    python_code,
-                    flags=re.DOTALL,
+                # Build the new FEATURES declaration
+                feat_lines = ",\n".join(f'    "{f}"' for f in features)
+                new_features_decl = f'FEATURES: List[str] = [\n{feat_lines}\n]'
+
+                # Replace the exact placeholder that exists in the ML template
+                old_features_decl = (
+                    'FEATURES: List[str] = list(CFG.get("ml_features", [])) or [\n'
+                    '    "region",\n'
+                    '    "area",\n'
+                    '    "bedrooms",\n'
+                    '    "bathrooms",\n'
+                    '    "age_of_property",\n'
+                    ']'
                 )
+                if old_features_decl in python_code:
+                    python_code = python_code.replace(old_features_decl, new_features_decl)
+                else:
+                    # Fallback: replace whatever FEATURES = [...] block is present
+                    python_code = re.sub(
+                        r'FEATURES:\s*List\[str\]\s*=.*?(?=\nFEATURE_LABELS|\ndef )',
+                        new_features_decl + "\n",
+                        python_code,
+                        count=1,
+                        flags=re.DOTALL,
+                    )
+
+            # Replace ENDPOINT_NAME with the actual endpoint
             if endpoint:
-                python_code = re.sub(
-                    r'ENDPOINT_NAME\s*=\s*os\.environ\.get\(\s*"SAGEMAKER_ENDPOINT",\s*CFG\.get\("aws",\s*\{\}\)\.get\("sagemaker_endpoint_name",\s*"rad-ml-endpoint"\),\s*\)',
-                    f'ENDPOINT_NAME = os.environ.get("SAGEMAKER_ENDPOINT", "{endpoint}")',
-                    python_code,
-                    flags=re.DOTALL,
+                old_endpoint = (
+                    'ENDPOINT_NAME = os.environ.get(\n'
+                    '    "SAGEMAKER_ENDPOINT",\n'
+                    '    CFG.get("aws", {}).get("sagemaker_endpoint_name", "rad-ml-endpoint"),\n'
+                    ')'
+                )
+                new_endpoint = f'ENDPOINT_NAME = os.environ.get("SAGEMAKER_ENDPOINT", "{endpoint}")'
+                python_code = python_code.replace(old_endpoint, new_endpoint)
+
+        # ── Inject prompt-derived app name / page title ──────────────────────
+        if user_prompt and mode in ("ml", "recommendation", "text_classification"):
+            app_name = self._derive_app_name_from_prompt(user_prompt)
+            if mode == "text_classification":
+                python_code = python_code.replace(
+                    'page_title="RAD-ML Text Classifier"', f'page_title="{app_name}"'
+                )
+                python_code = python_code.replace(
+                    '"📝 Text Classification"', f'"📝 {app_name}"'
+                )
+            elif mode == "ml":
+                python_code = python_code.replace(
+                    'page_title="RAD-ML Predictor"', f'page_title="{app_name}"'
+                )
+                python_code = python_code.replace(
+                    '"## 🔮 RAD-ML Predictor"', f'"## 🔮 {app_name}"'
+                )
+                python_code = python_code.replace(
+                    '"🔮 RAD-ML Predictor"', f'"🔮 {app_name}"'
+                )
+            else:  # recommendation
+                python_code = python_code.replace(
+                    'page_title="Movie Recommender"', f'page_title="{app_name}"'
+                )
+                python_code = python_code.replace(
+                    '"## 🎬 RAD-ML Movie Recommender"', f'"## 🎬 {app_name}"'
+                )
+                python_code = python_code.replace(
+                    '"## 🎬 Movie Recommender"', f'"## 🎬 {app_name}"'
+                )
+                # Also update the main title
+                python_code = python_code.replace(
+                    '"🎬 Movie Recommendation Engine"', f'"🎬 {app_name}"'
                 )
 
         # Build matching test stubs
@@ -643,10 +709,43 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
             tests_code = (
                 "import unittest\n"
                 "from unittest.mock import MagicMock, patch\n\n"
+                "def _mock_streamlit_module():\n"
+                "    st = MagicMock()\n"
+                "    st.sidebar.__enter__.return_value = st\n"
+                "    st.sidebar.__exit__.return_value = False\n"
+                "    tab_a = MagicMock()\n"
+                "    tab_b = MagicMock()\n"
+                "    tab_a.__enter__.return_value = st\n"
+                "    tab_a.__exit__.return_value = False\n"
+                "    tab_b.__enter__.return_value = st\n"
+                "    tab_b.__exit__.return_value = False\n"
+                "    st.tabs.return_value = [tab_a, tab_b]\n"
+                "    col_a = MagicMock()\n"
+                "    col_b = MagicMock()\n"
+                "    col_a.__enter__.return_value = st\n"
+                "    col_a.__exit__.return_value = False\n"
+                "    col_b.__enter__.return_value = st\n"
+                "    col_b.__exit__.return_value = False\n"
+                "    st.columns.return_value = [col_a, col_b]\n"
+                "    form_ctx = MagicMock()\n"
+                "    form_ctx.__enter__.return_value = st\n"
+                "    form_ctx.__exit__.return_value = False\n"
+                "    st.form.return_value = form_ctx\n"
+                "    spinner_ctx = MagicMock()\n"
+                "    spinner_ctx.__enter__.return_value = st\n"
+                "    spinner_ctx.__exit__.return_value = False\n"
+                "    st.spinner.return_value = spinner_ctx\n"
+                "    progress_bar = MagicMock()\n"
+                "    progress_bar.progress.return_value = None\n"
+                "    st.progress.return_value = progress_bar\n"
+                "    st.file_uploader.return_value = None\n"
+                "    st.form_submit_button.return_value = False\n"
+                "    st.button.return_value = False\n"
+                "    return st\n\n"
                 "class TestMLApp(unittest.TestCase):\n"
                 "    def setUp(self):\n"
                 "        import sys\n"
-                "        self._st_patcher = patch.dict(sys.modules, {'streamlit': MagicMock()})\n"
+                "        self._st_patcher = patch.dict(sys.modules, {'streamlit': _mock_streamlit_module()})\n"
                 "        self._st_patcher.start()\n"
                 "        import importlib\n"
                 "        import app as app_module\n"
@@ -675,14 +774,90 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
 
         return json.dumps({"python": python_code, "tests": tests_code, "html": "", "css": ""})
 
+    # ── Prompt Alignment Validator ────────────────────────────────────────────
+    @staticmethod
+    def _validate_prompt_alignment(
+        python_code: str,
+        user_prompt: str,
+        features: List[str],
+    ) -> bool:
+        """
+        Returns True if the generated app plausibly matches the user's prompt.
+        Checks that at least one feature name from the dataset appears in the code,
+        and that no obviously wrong default features are present.
+        """
+        src = (python_code or "").lower()
+        prompt_l = (user_prompt or "").lower()
+
+        # Must have at least one feature name in the source
+        has_feature = any(f.lower() in src for f in features or [])
+        if features and not has_feature:
+            log.warning(
+                "Prompt alignment: none of the features %s appear in generated code.", features
+            )
+            return False
+
+        # Default placeholder features that should NOT appear in a fitted stub
+        default_placeholders = ["age_of_property", "region", "area", "bedrooms", "bathrooms"]
+        if features:
+            # If we have actual features, none of the defaults should dominate
+            wrong = [p for p in default_placeholders if f'"{p}"' in src]
+            if wrong and not has_feature:
+                log.warning(
+                    "Prompt alignment: default placeholder features found %s, expected %s.",
+                    wrong, features
+                )
+                return False
+        return True
+
+    @staticmethod
+    def _derive_app_name_from_prompt(prompt: str) -> str:
+        """
+        Derive a clean, human-readable app title from the user's prompt.
+        E.g.: 'Build a classification model to predict customer churn' -> 'Customer Churn Predictor'
+        """
+        prompt_l = (prompt or "").lower()
+        # Common ML domain name patterns
+        domain_map = [
+            (["churn"], "Customer Churn Predictor"),
+            (["fraud", "anomaly"], "Fraud Detection"),
+            (["price", "house", "housing", "real estate"], "House Price Predictor"),
+            (["salary", "income", "wage"], "Salary Predictor"),
+            (["diabetes", "disease", "medical", "health"], "Medical Risk Predictor"),
+            (["sentiment", "review", "opinion"], "Sentiment Analyser"),
+            (["text classification", "classify text", "positive or negative", "positive or not"], "Text Classifier"),
+            (["spam", "phishing", "malware"], "Spam / Threat Detector"),
+            (["sales", "revenue", "demand"], "Sales Forecast"),
+            (["stock", "market", "price prediction"], "Stock Price Predictor"),
+            (["loan", "credit", "default"], "Loan Default Predictor"),
+            (["weather", "temperature", "rainfall"], "Weather Predictor"),
+            (["news", "topic"], "News Topic Classifier"),
+            (["recommend", "suggestion", "collaborative"], "Recommendation Engine"),
+        ]
+        for keywords, name in domain_map:
+            if any(kw in prompt_l for kw in keywords):
+                return name
+        # Generic fallback: capitalise first meaningful noun phrase
+        words = re.sub(r"(build|create|make|train|generate|a|an|the|model|to|for|with|based|on|using|ml|ai)", "", prompt_l)
+        words = words.strip().split()
+        clean = " ".join(w.capitalize() for w in words[:4] if w)
+        return clean or "RAD-ML Predictor"
+
     # ── Utility Helpers ───────────────────────────────────────────────────────
     @staticmethod
     def _infer_mode_hint(task: str) -> str:
         t = task.lower()
         if "chatbot" in t:
             return "chatbot"
-        if "recommendation" in t:
+        if "recommendation" in t or "recommend" in t:
             return "recommendation"
+        text_cls_keywords = [
+            "text classif", "sentiment", "positive or negative",
+            "positive or not", "classify text", "classify sentence",
+            "nlp classif", "language classif",
+        ]
+        if any(kw in t for kw in text_cls_keywords):
+            return "text_classification"
         return "ml"
 
     @staticmethod

@@ -36,12 +36,25 @@ def _load_config(path: str | None = None) -> dict:
     return {}
 
 
-def _infer_codegen_mode(project_spec: dict, pre_result: dict) -> str:
+def _infer_codegen_mode(project_spec: dict, pre_result: dict, user_prompt: str = "") -> str:
     task_type = str(project_spec.get("task_type") or pre_result.get("task_type") or "").lower()
+    prompt = (user_prompt or str(project_spec.get("prompt") or pre_result.get("prompt") or "")).lower()
     if task_type == "chatbot":
         return "chatbot"
     if task_type == "recommendation":
         return "recommendation"
+    # Detect text classification from task_type or prompt keywords
+    text_cls_keywords = [
+        "text classif", "sentiment", "positive or negative",
+        "positive or not", "classify text", "classify sentence",
+        "nlp classif", "language classif",
+    ]
+    if task_type == "classification" and any(kw in prompt for kw in text_cls_keywords):
+        return "text_classification"
+    if task_type in ("text_classification", "text classification"):
+        return "text_classification"
+    if any(kw in prompt for kw in text_cls_keywords):
+        return "text_classification"
     return "ml"
 
 
@@ -205,7 +218,8 @@ def _launch_streamlit_app(
     if extra_env:
         env.update({k: str(v) for k, v in extra_env.items()})
     candidate_errors: list[str] = []
-    per_candidate_timeout = max(12, min(25, timeout_secs))
+    # Give Streamlit enough time to start (pip install may have happened just before)
+    per_candidate_timeout = 60
 
     for python_for_streamlit in _iter_streamlit_python_candidates(config):
         cmd = [
@@ -226,9 +240,12 @@ def _launch_streamlit_app(
             "error",
         ]
 
+        subprocess.run([str(python_for_streamlit), "-m", "pip", "install", "-r", "requirements.txt"], cwd=str(app_dir), capture_output=True)
         out_log.write_text("", encoding="utf-8")
         err_log.write_text("", encoding="utf-8")
-        with open(out_log, "w", encoding="utf-8") as out_fh, open(err_log, "w", encoding="utf-8") as err_fh:
+        out_fh = open(out_log, "w", encoding="utf-8")  # noqa: SIM115
+        err_fh = open(err_log, "w", encoding="utf-8")  # noqa: SIM115
+        try:
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(app_dir),
@@ -237,14 +254,25 @@ def _launch_streamlit_app(
                 env=env,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
+        except Exception as spawn_exc:
+            out_fh.close()
+            err_fh.close()
+            candidate_errors.append(f"{python_for_streamlit}: spawn failed: {spawn_exc}")
+            continue
 
         start = time.time()
         while time.time() - start < per_candidate_timeout:
             if proc.poll() is not None:
-                error_tail = err_log.read_text(encoding="utf-8", errors="replace")[-1500:] if err_log.exists() else ""
+                out_fh.flush()
+                err_fh.flush()
+                out_fh.close()
+                err_fh.close()
+                error_tail = err_log.read_text(encoding="utf-8", errors="replace")[-2000:] if err_log.exists() else ""
                 candidate_errors.append(f"{python_for_streamlit}: {error_tail.strip() or f'process exited {proc.returncode}'}")
                 break
             if _is_http_ready(probe_url):
+                out_fh.flush()
+                err_fh.close()
                 pid_file.write_text(str(proc.pid), encoding="utf-8")
                 log.info(
                     "Streamlit app running (PID %s) with %s -> %s",
@@ -255,6 +283,8 @@ def _launch_streamlit_app(
                 return deploy_url, active_port
             time.sleep(1)
         else:
+            out_fh.flush()
+            err_fh.close()
             try:
                 proc.terminate()
             except Exception:
@@ -430,7 +460,7 @@ def run_codegen(db_results: dict, config: dict, job_id: str, log_fn=None) -> dic
     step("plan", f"Plan: {len(plan.get('file_structure', {}))} files | deps: {plan.get('dependencies', [])}")
 
     step("codegen", "Generating Streamlit app bundle...")
-    mode = _infer_codegen_mode(project_spec, pre_result)
+    mode = _infer_codegen_mode(project_spec, pre_result, user_prompt=db_results.get("prompt", ""))
     engine_meta = {
         "algorithm": sm_meta.get("algorithm") or project_spec.get("model_type") or "AWS SageMaker XGBoost",
         "endpoint": sm_meta.get("endpoint_name"),
