@@ -301,10 +301,10 @@ st.markdown("""
     margin: 1.5rem 0;
     box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   }
-  
+
   hr { border-color: rgba(59,130,246,0.2) !important; }
   [data-testid="stSpinner"] p { color: #93c5fd !important; font-weight: 500; }
-  
+
   /* Upload box */
   [data-testid="stFileUploader"] {
     background: rgba(255,255,255,0.05);
@@ -440,11 +440,11 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:0.5rem 0 1rem 0;">', unsafe_allow_html=True)
-    
+
     mode_color  = "#f59e0b" if MOCK_MODE else "#10b981"
     mode_label  = "Local Fallback" if MOCK_MODE else "SageMaker Live"
     mode_icon   = "💻" if MOCK_MODE else "☁️"
-    
+
     st.markdown(f"""
     <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
                 border-radius:12px;padding:1rem;margin-bottom:1rem;">
@@ -456,7 +456,7 @@ with st.sidebar:
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown(f"""
     <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
                 border-radius:12px;padding:1rem;">
@@ -472,7 +472,7 @@ with st.sidebar:
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:1rem 0;">', unsafe_allow_html=True)
     st.markdown("**Metrics (benchmark)**")
     c1, c2, c3 = st.columns(3)
@@ -638,24 +638,90 @@ st.set_page_config(page_title="Movie Recommender", page_icon="🎬", layout="wid
 
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-  html,body,[class*="css"]{font-family:'Inter',sans-serif;}
-  [data-testid="stAppViewContainer"]{background:#0d0f1a;}
-  [data-testid="stSidebar"]{background:#12152a;border-right:1px solid rgba(255,255,255,.07);}
-  h1,h2,h3{color:#e8eaf0!important;}
-  .stCaption{color:#8a8fa8!important;}
-  .mcard{background:linear-gradient(135deg,rgba(62,207,255,.07),rgba(124,106,247,.07));
-         border:1px solid rgba(62,207,255,.18);border-radius:14px;
-         padding:1rem 1.4rem;margin-bottom:.8rem;}
-  .mcard:hover{border-color:rgba(62,207,255,.45);}
-  .mrank{font-size:1.1rem;font-weight:700;color:#3ecfff;}
-  .mtitle{font-size:1.05rem;font-weight:600;color:#e8eaf0;}
-  .mmeta{font-size:.82rem;color:#8a8fa8;margin-top:.2rem;}
-  .star{color:#f5c518;}
-  .gbadge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.75rem;
-          font-weight:600;background:rgba(124,106,247,.25);color:#c4b5fd;margin-right:4px;}
-  .noresult{background:rgba(255,100,100,.07);border:1px solid rgba(255,100,100,.2);
-            border-radius:12px;padding:2rem;text-align:center;color:#e8eaf0;}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+  /* ── App background ── */
+  [data-testid="stAppViewContainer"] {
+    background: linear-gradient(160deg, #0b0e1a 0%, #111827 100%);
+  }
+
+  /* ── Sidebar overhaul ── */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1a2035 0%, #0f1629 100%) !important;
+    border-right: 2px solid #3b82f6 !important;
+  }
+  [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
+  [data-testid="stSidebar"] .stCaption,
+  [data-testid="stSidebar"] .stMarkdown p { color: #cbd5e1 !important; font-size: 0.92rem !important; }
+  [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+    color: #ffffff !important; font-weight: 700 !important;
+  }
+  
+  /* ── Main headings ── */
+  h1 { color: #ffffff !important; font-weight: 800 !important; font-size: 2.2rem !important; }
+  h2 { color: #e2e8f0 !important; font-weight: 700 !important; }
+  h3 { color: #e2e8f0 !important; font-weight: 600 !important; }
+  p, .stMarkdown p { color: #cbd5e1 !important; }
+  .stCaption { color: #94a3b8 !important; font-size: 0.9rem !important; }
+  
+  /* ── Form container ── */
+  div[data-testid="stForm"] {
+    background: rgba(59,130,246,0.06) !important;
+    border: 1px solid rgba(59,130,246,0.3) !important;
+    border-radius: 16px;
+    padding: 1.5rem 1.8rem;
+  }
+  [data-testid="stForm"] label {
+    color: #e2e8f0 !important; font-weight: 600 !important; font-size: 0.95rem !important;
+  }
+
+  /* ── Primary button ── */
+  .stButton > button[kind="primary"],
+  .stFormSubmitButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+    color: #ffffff !important; font-weight: 700 !important; font-size: 1rem !important;
+    border: none !important; border-radius: 10px !important;
+    padding: 0.65rem 1.5rem !important;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.4) !important;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stButton > button[kind="primary"]:hover,
+  .stFormSubmitButton > button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 28px rgba(59,130,246,0.55) !important;
+  }
+
+  /* ── Movie Cards ── */
+  .mcard {
+    background: linear-gradient(135deg, rgba(62,207,255,0.07), rgba(124,106,247,0.07));
+    border: 1px solid rgba(62,207,255,0.25);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .mcard:hover {
+    transform: translateY(-3px);
+    border-color: rgba(62,207,255,0.6);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  }
+  .mrank { font-size: 1.3rem; font-weight: 800; color: #3b82f6; }
+  .mtitle { font-size: 1.2rem; font-weight: 700; color: #e8eaf0; letter-spacing: 0.5px; }
+  .mmeta { font-size: 0.85rem; color: #94a3b8; margin-top: 0.4rem; }
+  .star { color: #fbbf24; font-weight: 600; }
+  .gbadge {
+    display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.8rem;
+    font-weight: 600; background: rgba(139,92,246,0.25); color: #c4b5fd; margin-right: 6px;
+  }
+  
+  /* ── No Results ── */
+  .noresult {
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 16px; padding: 2.5rem; text-align: center; color: #f1f5f9;
+  }
+  hr { border-color: rgba(59,130,246,0.2) !important; }
 </style>""", unsafe_allow_html=True)
 
 ENDPOINT_NAME   = os.environ.get("SAGEMAKER_ENDPOINT", "rad-ml-endpoint")
@@ -722,18 +788,8 @@ def _local_recommend(genre: str, min_rating: float, top_n: int) -> List[Dict]:
 
 
 def get_recommendations(genre: str, min_rating: float, top_n: int) -> List[Dict]:
-    if not boto3 or MOCK_MODE:
-        return _local_recommend(genre, min_rating, top_n)
-    try:
-        sm = boto3.client("sagemaker-runtime", region_name=AWS_REGION)
-        payload = f"{sum(ord(c) for c in genre.lower()) % 1000},{min_rating}"
-        raw = sm.invoke_endpoint(EndpointName=ENDPOINT_NAME, ContentType="text/csv", Body=payload)
-        titles = [t.strip() for t in raw["Body"].read().decode().split(",") if t.strip()]
-        if titles:
-            return [{"rank": i+1, "title": t, "genre": genre, "rating": "—", "year": "—", "desc": ""}
-                    for i, t in enumerate(titles[:top_n])]
-    except Exception:
-        pass
+    # Always use local catalogue for recommendations in the generated app UI
+    # because the raw XGBoost endpoint only returns a float which is not suitable here.
     return _local_recommend(genre, min_rating, top_n)
 
 
@@ -747,13 +803,45 @@ def _stars(r) -> str:
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🎬 Movie Recommender")
-    st.caption("Powered by RAD-ML + curated catalogue")
-    st.divider()
+    st.markdown("""
+    <div style="text-align:center;padding:0.5rem 0 1rem 0;">
+      <div style="font-size:2.8rem;margin-bottom:0.3rem;">🎬</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#ffffff;letter-spacing:0.5px;">Movie Recommender</div>
+      <div style="font-size:0.8rem;color:#93c5fd;margin-top:2px;">Powered by RAD-ML</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:0.5rem 0 1rem 0;">', unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;margin-bottom:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.6rem;">INFERENCE MODE</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.2rem;">🟡</span>
+        <span style="color:#f59e0b;font-weight:700;font-size:0.95rem;">Curated Catalogue</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     top_n = st.slider("Number of movies", 3, 20, 10)
-    st.divider()
-    st.caption(f"**Mode:** {'🟡 Local catalogue' if MOCK_MODE else '🟢 SageMaker'}")
-    st.caption(f"**Catalogue:** {len(CATALOGUE)} movies | {len(ALL_GENRES)} genres")
+
+    st.markdown(f"""
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+                border-radius:12px;padding:1rem;margin-top:1rem;">
+      <div style="color:#94a3b8;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:0.8px;margin-bottom:0.8rem;">CATALOGUE INFO</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Movies</span>
+        <span style="color:#60a5fa;font-weight:700;font-size:0.95rem;">{len(CATALOGUE)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="color:#cbd5e1;font-size:0.88rem;">Genres</span>
+        <span style="color:#a78bfa;font-weight:700;font-size:0.95rem;">{len(ALL_GENRES)}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.title("🎬 Movie Recommendation Engine")
@@ -1039,7 +1127,7 @@ def _sagemaker_classify(text: str) -> Dict:
             return {"label": raw, "confidence": 0.95, "positive_score": 0.0,
                     "negative_score": 0.0, "matched_words": []}
     except Exception as exc:
-        # Silently fall back to local classifier since XGBoost SageMaker 
+        # Silently fall back to local classifier since XGBoost SageMaker
         # deployed natively expects numeric vectors instead of raw user strings.
         return _local_classify(text)
 

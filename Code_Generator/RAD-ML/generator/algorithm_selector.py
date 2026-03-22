@@ -217,7 +217,7 @@ class AlgorithmSelector:
                 reason = f"Dataset has {dataset_size:,} rows → LightGBM (fastest)"
             else:
                 algo_name = "xgboost"
-                reason = f"Dataset size optimal for XGBoost (most accurate)"
+                reason = "Dataset size optimal for XGBoost (most accurate)"
 
             config = _REGRESSION_ALGORITHMS[algo_name]
             return {
@@ -242,7 +242,7 @@ class AlgorithmSelector:
                 reason = f"Dataset has {dataset_size:,} rows → LightGBM (fastest)"
             else:
                 algo_name = "xgboost"
-                reason = f"Dataset size optimal for XGBoost (most accurate)"
+                reason = "Dataset size optimal for XGBoost (most accurate)"
 
             config = _CLASSIFICATION_ALGORITHMS[algo_name]
             return {

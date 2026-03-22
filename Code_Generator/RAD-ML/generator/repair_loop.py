@@ -18,7 +18,7 @@ import logging
 import re
 from pathlib import Path
 
-from generator.validator import ValidationReport, FileReport
+from generator.validator import ValidationReport
 
 logger = logging.getLogger(__name__)
 

@@ -59,6 +59,7 @@ Produce a JSON object with EXACTLY these keys:
 - "constraints"  : list of hard requirements
 - "coding_style" : "production" (type hints, docstrings, logging, error handling)
 - "endpoint_name": the SageMaker endpoint name
+{output_desc_instruction}
 
 Return ONLY valid JSON. No markdown. No explanation.
 """
@@ -92,6 +93,9 @@ class PromptUnderstandingLayer:
         feature_cols  = preprocess_result.get("feature_cols", parsed_spec.get("input_params", []))
         target_col    = preprocess_result.get("target_col",   parsed_spec.get("target_param", "output"))
 
+        out_desc = parsed_spec.get("output_description", "")
+        out_desc_instruction = f'- "output_description": "{out_desc}"' if out_desc else ""
+
         prompt_text = _UNDERSTANDING_PROMPT.format(
             prompt           = prompt,
             task_type        = parsed_spec.get("task_type", "regression"),
@@ -101,6 +105,7 @@ class PromptUnderstandingLayer:
             row_count        = dataset_info.get("row_count", 0),
             endpoint_name    = endpoint_name,
             aws_region       = aws_region,
+            output_desc_instruction = out_desc_instruction
         )
 
         try:
@@ -115,6 +120,8 @@ class PromptUnderstandingLayer:
             spec.setdefault("requested_features", parsed_spec.get("input_params", []))
             spec["feature_cols"] = feature_cols   # always use preprocessor's columns
             spec["target_col"]   = target_col
+            if out_desc:
+                spec["output_description"] = out_desc
             logger.info("ProjectSpec built: task=%s  features=%d  deliverables=%d",
                         spec.get("task"), len(spec.get("features", [])),
                         len(spec.get("deliverables", [])))
@@ -157,4 +164,5 @@ class PromptUnderstandingLayer:
             "endpoint_name": endpoint_name,
             "aws_region":    aws_region,
             "requested_features": parsed_spec.get("input_params", []),
+            "output_description": parsed_spec.get("output_description", ""),
         }

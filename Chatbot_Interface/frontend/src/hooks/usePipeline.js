@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-
-const API = '/api'
+import { apiUrl } from '../lib/api.js'
 
 export function usePipeline(getToken) {
   const [jobs, setJobs] = useState([])
@@ -40,7 +39,7 @@ export function usePipeline(getToken) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/history`, { headers: _jsonHeaders() })
+      const res = await fetch(apiUrl('/history'), { headers: _jsonHeaders() })
       if (!res.ok) return
       const data = await res.json()
       setJobs((data.jobs || []).map(j => ({
@@ -61,7 +60,7 @@ export function usePipeline(getToken) {
   const _pollUntilDone = useCallback((job_id) => {
     const iv = setInterval(async () => {
       try {
-        const res = await fetch(`${API}/pipeline/status/${job_id}`, {
+        const res = await fetch(apiUrl(`/pipeline/status/${job_id}`), {
           headers: _jsonHeaders(),
         })
         if (!res.ok) {
@@ -91,7 +90,7 @@ export function usePipeline(getToken) {
       esRef.current = null
     }
     const token = localStorage.getItem('radml_token') || ''
-    const es = new EventSource(`${API}/pipeline/stream/${job_id}?token=${token}`)
+    const es = new EventSource(apiUrl(`/pipeline/stream/${job_id}?token=${encodeURIComponent(token)}`))
     esRef.current = es
 
     es.onmessage = (e) => {
@@ -143,7 +142,7 @@ export function usePipeline(getToken) {
 
   const runPipeline = useCallback(async (prompt) => {
     try {
-      const res = await fetch(`${API}/pipeline/run`, {
+      const res = await fetch(apiUrl('/pipeline/run'), {
         method: 'POST',
         headers: _jsonHeaders(),
         body: JSON.stringify({ prompt }),
@@ -175,7 +174,7 @@ export function usePipeline(getToken) {
       const formData = new FormData()
       formData.append('prompt', prompt)
       formData.append('file', file)
-      const res = await fetch(`${API}/pipeline/upload`, {
+      const res = await fetch(apiUrl('/pipeline/upload'), {
         method: 'POST',
         headers: _authHeaders(),
         body: formData,
@@ -204,7 +203,7 @@ export function usePipeline(getToken) {
 
   const stopPipeline = useCallback(async (jobId) => {
     try {
-      await fetch(`${API}/pipeline/stop/${jobId}`, {
+      await fetch(apiUrl(`/pipeline/stop/${jobId}`), {
         method: 'POST',
         headers: _jsonHeaders(),
       })
@@ -233,7 +232,7 @@ export function usePipeline(getToken) {
     }
 
     try {
-      const res = await fetch(`${API}/history/${jobId}`, { headers: _jsonHeaders() })
+      const res = await fetch(apiUrl(`/history/${jobId}`), { headers: _jsonHeaders() })
       if (!res.ok) return
       const data = await res.json()
       const full = {
@@ -254,7 +253,7 @@ export function usePipeline(getToken) {
 
   const deleteJob = useCallback(async (jobId) => {
     try {
-      await fetch(`${API}/history/${jobId}`, {
+      await fetch(apiUrl(`/history/${jobId}`), {
         method: 'DELETE',
         headers: _jsonHeaders(),
       })
@@ -267,7 +266,7 @@ export function usePipeline(getToken) {
 
   const deleteAllHistory = useCallback(async () => {
     try {
-      await fetch(`${API}/history`, {
+      await fetch(apiUrl('/history'), {
         method: 'DELETE',
         headers: _jsonHeaders(),
       })

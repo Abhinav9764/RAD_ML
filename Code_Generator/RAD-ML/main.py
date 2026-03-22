@@ -36,14 +36,46 @@ def _load_config(path: str | None = None) -> dict:
     return {}
 
 
+# Keywords that signal the user wants a RECOMMENDATION system (filtered / ranked cards)
+_RECOMMENDATION_PROMPT_KEYWORDS = {
+    "recommend", "recommendation", "suggest", "suggestion",
+    "similar", "similar movies", "top movies", "best movies",
+    "movie suggestion", "film suggest", "what to watch",
+    "filter movies", "rank movies",
+}
+
+
 def _infer_codegen_mode(project_spec: dict, pre_result: dict, user_prompt: str = "") -> str:
+    """
+    Infer the codegen mode strictly from the user's ACTUAL prompt words, not just
+    the coarse task_type bucket.  This ensures that a prompt such as
+    "Build a movie recommendation system using genre and rating" always produces
+    the recommendation template (genre select + rating slider + ranked cards)
+    rather than the generic ML predictor that shows a raw float.
+    """
     task_type = str(project_spec.get("task_type") or pre_result.get("task_type") or "").lower()
     prompt = (user_prompt or str(project_spec.get("prompt") or pre_result.get("prompt") or "")).lower()
+
+    # ── Chatbot ───────────────────────────────────────────────────────────────
     if task_type == "chatbot":
         return "chatbot"
-    if task_type == "recommendation":
+
+    # ── Recommendation (explicit task_type OR clustering + keywords) ──────────
+    # The prompt parser classifies recommend/similar/suggest prompts as
+    # task_type="clustering".  We must catch both spellings here so the
+    # recommendation template (with movie cards, genre dropdown, rating slider)
+    # is always used instead of the generic ML predictor.
+    if task_type in ("recommendation", "clustering") and any(
+        kw in prompt for kw in _RECOMMENDATION_PROMPT_KEYWORDS
+    ):
         return "recommendation"
-    # Detect text classification from task_type or prompt keywords
+
+    # Also catch when the prompt itself has recommendation keywords regardless
+    # of what task_type the parser returned
+    if any(kw in prompt for kw in _RECOMMENDATION_PROMPT_KEYWORDS):
+        return "recommendation"
+
+    # ── Text Classification ───────────────────────────────────────────────────
     text_cls_keywords = [
         "text classif", "sentiment", "positive or negative",
         "positive or not", "classify text", "classify sentence",
@@ -55,6 +87,8 @@ def _infer_codegen_mode(project_spec: dict, pre_result: dict, user_prompt: str =
         return "text_classification"
     if any(kw in prompt for kw in text_cls_keywords):
         return "text_classification"
+
+    # ── Generic ML predictor (regression / classification / clustering) ───────
     return "ml"
 
 
@@ -198,7 +232,7 @@ def _launch_streamlit_app(
     active_port = _get_free_port(base_port)
     deploy_url = f"http://localhost:{active_port}"
     probe_url = f"http://127.0.0.1:{active_port}/_stcore/health"
-    timeout_secs = int(config.get("refinement", {}).get("app_start_timeout_secs", 120))
+    int(config.get("refinement", {}).get("app_start_timeout_secs", 120))
 
     logs_dir = app_dir.parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -467,6 +501,7 @@ def run_codegen(db_results: dict, config: dict, job_id: str, log_fn=None) -> dic
         "model_name": sm_meta.get("model_name"),
         "training_job_name": sm_meta.get("job_name"),
         "s3_uri": train_s3,
+        "task_type": str(project_spec.get("task_type") or pre_result.get("task_type") or "").lower(),
         "features": pre_result.get("feature_cols", []),
         "requested_features": project_spec.get("requested_features", spec.get("input_params", [])),
         "target_column": pre_result.get("target_col"),

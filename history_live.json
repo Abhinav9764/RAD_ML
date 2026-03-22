@@ -1,0 +1,117 @@
+{
+  "jobs": [
+    {
+      "created_at": "2026-03-22T11:38:08.282504+00:00",
+      "error": "",
+      "job_id": "724b81ac-1d3",
+      "logs": [
+        {
+          "message": "Starting data collection \u2026",
+          "step": "collection",
+          "ts": 1774179488.283144
+        },
+        {
+          "message": "Parsing prompt: test dummy",
+          "step": "parse",
+          "ts": 1774179490.574755
+        },
+        {
+          "message": "Intent classified -> intent=ML_MODEL  task=REGRESSION  domain='dummy'",
+          "step": "parse",
+          "ts": 1774179490.5769095
+        },
+        {
+          "message": "Search keywords: ['dummy']  |  Inputs: ['dummy']  |  Target: price",
+          "step": "parse",
+          "ts": 1774179490.5772955
+        },
+        {
+          "message": "Fallback datasets ready: ['harlfoxem/house-prices-dataset', 'camnugent/california-housing-prices', 'mirichoi0218/insurance']",
+          "step": "parse",
+          "ts": 1774179490.5778203
+        },
+        {
+          "message": "Tier 0 - found 2 matching local cached dataset(s)",
+          "step": "search",
+          "ts": 1774179490.6030405
+        },
+        {
+          "message": "Tier 1 - searching Kaggle + UCI + OpenML + HuggingFace",
+          "step": "search",
+          "ts": 1774179490.6035237
+        },
+        {
+          "message": "  query: 'dummy' (parallel providers, 10s budget)",
+          "step": "search",
+          "ts": 1774179490.6041148
+        },
+        {
+          "message": "    kaggle: 0 result(s)",
+          "step": "search",
+          "ts": 1774179490.6079836
+        },
+        {
+          "message": "    uci: 0 result(s)",
+          "step": "search",
+          "ts": 1774179492.3713362
+        },
+        {
+          "message": "    huggingface: 8 result(s)",
+          "step": "search",
+          "ts": 1774179492.942888
+        },
+        {
+          "message": "    openml: 0 result(s)",
+          "step": "search",
+          "ts": 1774179498.69516
+        },
+        {
+          "message": "    kaggle note: Kaggle credentials not available at ~/.kaggle/kaggle.json. Skipping Kaggle search.",
+          "step": "search",
+          "ts": 1774179498.6962733
+        },
+        {
+          "message": "  'dummy' -> Kaggle:0  UCI:0  OpenML:0  HuggingFace:8",
+          "step": "search",
+          "ts": 1774179498.6980212
+        },
+        {
+          "message": "Best candidate: 'Yoshitomo-Matsubara / Srsd-Feynman Easy Dummy'  source=HUGGINGFACE  score=0.400",
+          "step": "score",
+          "ts": 1774179498.6996744
+        },
+        {
+          "message": "[HUGGINGFACE] Yoshitomo-Matsubara / Srsd-Feynman Easy Dummy",
+          "step": "download",
+          "ts": 1774179498.7013545
+        },
+        {
+          "message": "  -> data.csv  rows=240000  score=0.700",
+          "step": "download",
+          "ts": 1774179547.7412882
+        },
+        {
+          "message": "[HUGGINGFACE] Yoshitomo-Matsubara / Srsd-Feynman Medium Dummy",
+          "step": "download",
+          "ts": 1774179547.7420785
+        },
+        {
+          "message": "  -> data.csv  rows=320000  score=0.700",
+          "step": "download",
+          "ts": 1774179616.7943265
+        },
+        {
+          "message": "Row threshold met - stopping early.",
+          "step": "download",
+          "ts": 1774179616.7952046
+        }
+      ],
+      "prompt": "test dummy",
+      "result": {},
+      "status": "running",
+      "updated_at": "2026-03-22T11:40:16.797322+00:00",
+      "updated_at_epoch": 1774179616,
+      "user_id": "1"
+    }
+  ]
+}

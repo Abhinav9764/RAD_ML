@@ -15,8 +15,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Suppress unicode errors
-sys.stdout = open(sys.stdout.fileno(), 'w', encoding='utf-8', errors='ignore')
+# Suppress unicode errors (Removed destructive sys.stdout replacement)
 
 import pytest
 from unittest.mock import patch, MagicMock

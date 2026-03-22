@@ -419,8 +419,16 @@ def run_collection(prompt: str, config: dict, job_id: str, log_fn=None) -> dict:
             f"  -> {csv_path.name}  rows={meta.get('row_count', '?')}  score={final_score:.3f}",
         )
 
-        if meta.get("row_count", 0) >= min_rows and len(scored_csvs) >= 2:
-            step("download", "Row threshold met - stopping early.")
+        should_stop_early = meta.get("row_count", 0) >= min_rows and (
+            source == "local_cache" or len(scored_csvs) >= 2
+        )
+        if should_stop_early:
+            reason = (
+                "Local cached dataset already meets the row threshold - skipping slower remote downloads."
+                if source == "local_cache"
+                else "Row threshold met - stopping early."
+            )
+            step("download", reason)
             break
 
     if not scored_csvs:

@@ -88,7 +88,12 @@ class CodeGenFactory:
         elif not self._is_streamlit_python(python_code):
             log.warning("Generated code is not valid Streamlit. Using stub.")
             bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
-        elif not self._matches_expected_mode(python_code, mode):
+        elif not self._matches_expected_mode(
+            python_code,
+            mode,
+            prompt_task_type=str(engine_meta.get("task_type", "")).lower(),
+            user_prompt=user_prompt,
+        ):
             log.warning("Generated code does not match mode '%s'. Using stub.", mode)
             bundle = self._parse_json_response(self._stub_bundle_json(mode, user_prompt))
         elif not self._validate_prompt_alignment(python_code, user_prompt, features):
@@ -157,7 +162,13 @@ Data Source: {data_source_lbl}
 Algorithm/Model: {algorithm_lbl}
 
 User Goal: {user_prompt}
+"""
+        
+        out_desc = engine_meta.get("output_description")
+        if out_desc:
+            prompt += f"\nExpected Output Format: {out_desc}\n"
 
+        prompt += f"""
 Requirements:
 
 Requirement 1 — app.py (Streamlit only):
@@ -451,8 +462,26 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
         return has_streamlit and not has_flask
 
     @staticmethod
-    def _matches_expected_mode(python_code: str, mode: str) -> bool:
+    def _matches_expected_mode(
+        python_code: str,
+        mode: str,
+        prompt_task_type: str = "",
+        user_prompt: str = "",
+    ) -> bool:
         src = str(python_code or "").lower()
+        prompt_l = (user_prompt or "").lower()
+        rec_prompt_markers = (
+            "recommend", "recommendation", "suggest", "similar",
+            "movie", "film", "top movies", "best movies",
+        )
+        expected_mode = mode
+        if mode == "recommendation":
+            expected_mode = "recommendation"
+        elif prompt_task_type in ("recommendation", "clustering") and any(
+            m in prompt_l for m in rec_prompt_markers
+        ):
+            expected_mode = "recommendation"
+
         markers = {
             "ml": (
                 "make_prediction", "predict", "st.form", "st.file_uploader",
@@ -465,7 +494,7 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
                 "recommendation", "recommend", "suggest", "top_n", "predict",
             ),
         }
-        return any(m in src for m in markers.get(mode, ()))
+        return any(m in src for m in markers.get(expected_mode, ()))
 
     # ── Formatting Helpers ────────────────────────────────────────────────────
     @staticmethod
@@ -531,6 +560,15 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
             return (
                 "- Restrict inference data to property-price records only; "
                 "exclude unrelated domains."
+            )
+        if any(t in prompt_l for t in (
+            "recommend", "recommendation", "suggest", "movie", "film",
+            "genre", "rating", "similar", "collaborative", "clustering",
+        )):
+            return (
+                "- This is a RECOMMENDATION system. Display results as ranked cards "
+                "with title, genre, rating and a description. Never show a raw float "
+                "or numeric prediction as the main result."
             )
         return (
             "- Restrict inference data to rows directly relevant to the prompt domain."
@@ -783,13 +821,39 @@ Do NOT include any explanation, markdown fences, or text outside the JSON object
     ) -> bool:
         """
         Returns True if the generated app plausibly matches the user's prompt.
-        Checks that at least one feature name from the dataset appears in the code,
-        and that no obviously wrong default features are present.
+
+        For RECOMMENDATION mode the check is intentionally lenient: the stub
+        already contains genre/rating widgets and ranked movie cards, so we
+        verify presence of those markers instead of raw feature column names.
+
+        For standard ML mode we verify that at least one feature name from the
+        dataset appears in the code.
         """
         src = (python_code or "").lower()
         prompt_l = (user_prompt or "").lower()
 
-        # Must have at least one feature name in the source
+        # ── Recommendation prompts ────────────────────────────────────────────
+        recommendation_keywords = (
+            "recommend", "recommendation", "suggest", "top movies",
+            "best movies", "similar",
+        )
+        if any(kw in prompt_l for kw in recommendation_keywords):
+            # The recommendation stub always contains these markers.
+            # If they're present the code is correct for the prompt.
+            rec_markers = ("genre", "rating", "recommend", "catalogue", "top_n")
+            if any(m in src for m in rec_markers):
+                return True
+            log.warning(
+                "Prompt alignment: recommendation prompt but no recommendation markers in code."
+            )
+            return False
+
+        # ── Chatbot prompts ───────────────────────────────────────────────────
+        chatbot_keywords = ("chatbot", "chat bot", "rag", "conversation", "assistant")
+        if any(kw in prompt_l for kw in chatbot_keywords):
+            return "chat_input" in src or "chat_message" in src
+
+        # ── Standard ML prompts — must have at least one feature name ─────────
         has_feature = any(f.lower() in src for f in features or [])
         if features and not has_feature:
             log.warning(

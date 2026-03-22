@@ -3,7 +3,7 @@ patch_ml_template.py
 Updates the STREAMLIT_APP_ML template in base_streamlit.py to match the high-contrast UI.
 Also directly updates workspace/current_app/app.py to apply it immediately.
 """
-import pathlib, sys
+import pathlib
 
 TARGET = pathlib.Path(__file__).resolve().parent / "generator" / "base_streamlit.py"
 APP = pathlib.Path(__file__).resolve().parent / "workspace" / "current_app" / "app.py"
@@ -141,10 +141,10 @@ st.markdown("""
     margin: 1.5rem 0;
     box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   }
-  
+
   hr { border-color: rgba(59,130,246,0.2) !important; }
   [data-testid="stSpinner"] p { color: #93c5fd !important; font-weight: 500; }
-  
+
   /* Upload box */
   [data-testid="stFileUploader"] {
     background: rgba(255,255,255,0.05);
@@ -280,11 +280,11 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:0.5rem 0 1rem 0;">', unsafe_allow_html=True)
-    
+
     mode_color  = "#f59e0b" if MOCK_MODE else "#10b981"
     mode_label  = "Local Fallback" if MOCK_MODE else "SageMaker Live"
     mode_icon   = "💻" if MOCK_MODE else "☁️"
-    
+
     st.markdown(f"""
     <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
                 border-radius:12px;padding:1rem;margin-bottom:1rem;">
@@ -296,7 +296,7 @@ with st.sidebar:
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown(f"""
     <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
                 border-radius:12px;padding:1rem;">
@@ -312,7 +312,7 @@ with st.sidebar:
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown('<hr style="border-color:rgba(59,130,246,0.35);margin:1rem 0;">', unsafe_allow_html=True)
     st.markdown("**Metrics (benchmark)**")
     c1, c2, c3 = st.columns(3)
@@ -445,7 +445,7 @@ else:
     if last_triple_quote != -1:
         before = src[:start_idx]
         after = src[last_triple_quote + 3:]
-        
+
         new_section = "# ---------------------------------------------------------------------------\nSTREAMLIT_APP_ML = '''" + INNER + "'''\n\n\n"
         TARGET.write_text(before + new_section + after, encoding="utf-8")
         print("[OK] base_streamlit.py patched")

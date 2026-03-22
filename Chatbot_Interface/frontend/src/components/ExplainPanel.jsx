@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { apiUrl } from '../lib/api.js'
 
 const TABS = [
   { id: 'narrative',  label: '📖 Explanation',  desc: 'Plain-English summary' },
@@ -23,7 +24,7 @@ export default function ExplainPanel({ jobId, result, getToken }) {
     }
     if (!jobId) return
     setLoading(true)
-    fetch(`/api/explain/${jobId}`, {
+    fetch(apiUrl(`/explain/${jobId}`), {
       headers: { Authorization: `Bearer ${getToken()}` },
     })
       .then(r => r.json())

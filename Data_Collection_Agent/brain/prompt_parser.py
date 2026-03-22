@@ -294,6 +294,48 @@ def _is_useful(token: str) -> bool:
     )
 
 
+def _extract_io_directives(prompt: str) -> tuple[list[str], str]:
+    """
+    Looks for explicit 'input: ...' and 'output: ...' patterns.
+    Returns (input_params_list, output_description_string)
+    """
+    input_params: list[str] = []
+    out_desc = ""
+
+    p_lower = prompt.lower()
+    # Find 'input:' and 'output:' indices
+    i_idx = p_lower.find("input:")
+    if i_idx == -1:
+        i_idx = p_lower.find("input :")
+        
+    o_idx = p_lower.find("output:")
+    if o_idx == -1:
+        o_idx = p_lower.find("output :")
+
+    if i_idx != -1:
+        # We have an input directive
+        start = i_idx + p_lower[i_idx:].find(":") + 1
+        # where does the input sector end? At 'output:' or end of string.
+        end = o_idx if o_idx != -1 and o_idx > start else len(prompt)
+        raw_inputs = prompt[start:end].strip()
+        # remove trailing periods or newlines
+        raw_inputs = re.sub(r'[\.\n]+$', '', raw_inputs)
+        if raw_inputs:
+            input_params = [x.strip() for x in raw_inputs.split(',') if x.strip()]
+
+    if o_idx != -1:
+        start = o_idx + p_lower[o_idx:].find(":") + 1
+        # output sector usually goes to the end
+        end = len(prompt)
+        # just in case input comes after output? rare but possible
+        if i_idx > o_idx:
+            end = i_idx
+        raw_output = prompt[start:end].strip()
+        out_desc = re.sub(r'[\.\n]+$', '', raw_output)
+        
+    return input_params, out_desc
+
+
 def _build_spec_from_prompt(prompt: str) -> dict:
     """
     Full NLP analysis of the prompt.
@@ -358,13 +400,18 @@ def _build_spec_from_prompt(prompt: str) -> dict:
     search_keywords = list(dict.fromkeys(search_keywords))[:6]
     fallback_refs   = list(dict.fromkeys(fallback_refs))[:5]
 
-    # ── Input params ─────────────────────────────────────────────────────────
-    input_params = _extract_input_params(low, tokens)
-
-    # ── Target param ─────────────────────────────────────────────────────────
+    # ── Original param extraction ──────────────────────────────────────────────
+    raw_input_params = _extract_input_params(low, tokens)
     target_param = _extract_target(low, task_type)
 
-    return {
+    # ── Override with Explicit Directives ────────────────────────────────────
+    explicit_inputs, explicit_output = _extract_io_directives(prompt)
+    if explicit_inputs:
+        input_params = explicit_inputs
+    else:
+        input_params = raw_input_params
+
+    spec = {
         "raw":            prompt,
         "intent":         intent,
         "task_type":      task_type,
@@ -381,6 +428,11 @@ def _build_spec_from_prompt(prompt: str) -> dict:
             "chatbot":        chat_score,
         },
     }
+
+    if explicit_output:
+        spec["output_description"] = explicit_output
+
+    return spec
 
 
 def _extract_input_params(low: str, tokens: list[str]) -> list[str]:

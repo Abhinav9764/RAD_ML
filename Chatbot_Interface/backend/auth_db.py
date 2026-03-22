@@ -114,7 +114,15 @@ class AuthDB:
             return None
         if not row["password_hash"]:
             return None   # Google-only account
-        if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        try:
+            if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+                return None
+        except ValueError as exc:
+            logger.warning(
+                "Skipping login for user '%s' because stored password hash is invalid: %s",
+                username.strip(),
+                exc,
+            )
             return None
         return dict(row)
 

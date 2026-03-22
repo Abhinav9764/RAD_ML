@@ -10,19 +10,15 @@ Model evaluation and retraining pipeline with:
 """
 from __future__ import annotations
 import logging
-import json
 import numpy as np
-import pandas as pd
-from typing import Dict, Tuple, List, Optional
-from pathlib import Path
-import subprocess
+from typing import Dict, Tuple, Optional
 import time
 
 logger = logging.getLogger(__name__)
 
 try:
-    from sklearn.model_selection import cross_val_score, StratifiedKFold, KFold
-    from sklearn.preprocessing import StandardScaler, RobustScaler
+    from sklearn.model_selection import cross_val_score
+    from sklearn.preprocessing import RobustScaler
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
     from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
     from imblearn.over_sampling import SMOTE
@@ -51,7 +47,7 @@ class ModelEvaluator:
     ) -> Dict:
         """
         Evaluate classification model.
-        
+
         Parameters
         ----------
         model : classifier
@@ -66,37 +62,37 @@ class ModelEvaluator:
             Validation labels
         cv_folds : int
             Number of cross-validation folds
-            
+
         Returns
         -------
         dict with evaluation metrics and retraining recommendation
         """
         y_pred = model.predict(X_test)
-        
+
         # Calculate metrics
         accuracy = accuracy_score(y_test, y_pred)
         precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
         recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
         f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
-        
+
         # Cross-validation score
         cv_scores = cross_val_score(model, X_test, y_test, cv=cv_folds, scoring='accuracy')
         cv_mean = cv_scores.mean()
         cv_std = cv_scores.std()
         confidence = cv_mean - cv_std  # Conservative estimate
-        
+
         # Validation set (if provided)
         val_accuracy = None
         if X_val is not None and y_val is not None:
             y_val_pred = model.predict(X_val)
             val_accuracy = accuracy_score(y_val, y_val_pred)
-        
+
         # Determine if retraining is needed
         needs_retrain = (
             accuracy < ModelEvaluator.ACCURACY_THRESHOLD or
             confidence < ModelEvaluator.CONFIDENCE_THRESHOLD
         )
-        
+
         return {
             "task_type": "classification",
             "test_accuracy": float(accuracy),
@@ -130,7 +126,7 @@ class ModelEvaluator:
     ) -> Dict:
         """
         Evaluate regression model.
-        
+
         Parameters
         ----------
         model : regressor
@@ -145,37 +141,37 @@ class ModelEvaluator:
             Validation values
         cv_folds : int
             Number of cross-validation folds
-            
+
         Returns
         -------
         dict with evaluation metrics and retraining recommendation
         """
         y_pred = model.predict(X_test)
-        
+
         # Calculate metrics
         mse = mean_squared_error(y_test, y_pred)
         rmse = np.sqrt(mse)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
-        
+
         # Cross-validation R² score
         cv_scores = cross_val_score(model, X_test, y_test, cv=cv_folds, scoring='r2')
         cv_mean = cv_scores.mean()
         cv_std = cv_scores.std()
         confidence = cv_mean - cv_std
-        
+
         # For regression, check if R² >= 0.95 (equivalent to 95% variance explained)
         accuracy_equivalent = r2
         needs_retrain = (
             accuracy_equivalent < ModelEvaluator.ACCURACY_THRESHOLD or
             confidence < ModelEvaluator.CONFIDENCE_THRESHOLD
         )
-        
+
         val_r2 = None
         if X_val is not None and y_val is not None:
             y_val_pred = model.predict(X_val)
             val_r2 = r2_score(y_val, y_val_pred)
-        
+
         return {
             "task_type": "regression",
             "test_rmse": float(rmse),
@@ -223,13 +219,13 @@ class ModelEvaluator:
         """Format evaluation results as readable report."""
         task_type = eval_result["task_type"]
         status = eval_result["status"]
-        
+
         if task_type == "classification":
-            metrics = eval_result["metrics"]
+            eval_result["metrics"]
             val_acc = eval_result.get('val_accuracy')
             val_str = f"{val_acc:.4f}" if isinstance(val_acc, float) else "N/A"
             needs_str = "YES" if eval_result['needs_retrain'] else "NO"
-            
+
             return f"""\
 ═══════════════════════════════════════════════════════════════
 MODEL EVALUATION REPORT - {status}
@@ -251,7 +247,7 @@ Reason                         : {eval_result['reason']}
             val_r2 = eval_result.get('val_r2')
             val_str = f"{val_r2:.4f}" if isinstance(val_r2, float) else "N/A"
             needs_str = "YES" if eval_result['needs_retrain'] else "NO"
-            
+
             return f"""\
 ═══════════════════════════════════════════════════════════════
 MODEL EVALUATION REPORT - {status}
@@ -292,7 +288,7 @@ class DataAugmenter:
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Augment classification dataset.
-        
+
         Techniques:
         - "smote": Synthetic Minority Oversampling
         - "scale": Feature scaling
@@ -359,23 +355,23 @@ class RetrainingOrchestrator:
     ) -> Tuple[object, Dict]:
         """
         Retrain classification model with best practices.
-        
+
         Returns: (retrained_model, evaluation_result)
         """
         # Step 1: Data augmentation
         if augmentation and DataAugmenter.is_small_dataset(len(X_train)):
             X_train, y_train = DataAugmenter.augment_classification(X_train, y_train, technique="mix")
             logger.info(f"Data augmented: new training set size = {len(X_train)}")
-        
+
         # Step 2: Model retraining with best practices
         logger.info("Retraining model with hyperparameter optimization...")
-        
+
         if hasattr(model_class, 'fit'):
             # Add validation set for early stopping
             val_size = int(0.2 * len(X_train))
             X_train_split, X_val = X_train[:-val_size], X_train[-val_size:]
             y_train_split, y_val = y_train[:-val_size], y_train[-val_size:]
-            
+
             # Try to fit with eval_set if model supports it (XGBoost, LightGBM)
             try:
                 model_class.fit(
@@ -387,12 +383,12 @@ class RetrainingOrchestrator:
             except TypeError:
                 # Standard sklearn models
                 model_class.fit(X_train_split, y_train_split)
-        
+
         # Step 3: Evaluate retrained model
         eval_result = ModelEvaluator.evaluate_classification(
             model_class, X_test, y_test, X_val, y_val
         )
-        
+
         return model_class, eval_result
 
     @staticmethod
@@ -407,23 +403,23 @@ class RetrainingOrchestrator:
     ) -> Tuple[object, Dict]:
         """
         Retrain regression model with best practices.
-        
+
         Returns: (retrained_model, evaluation_result)
         """
         # Step 1: Data augmentation
         if augmentation and DataAugmenter.is_small_dataset(len(X_train)):
             X_train, y_train = DataAugmenter.augment_regression(X_train, y_train)
             logger.info(f"Data augmented: new training set size = {len(X_train)}")
-        
+
         # Step 2: Model retraining with best practices
         logger.info("Retraining model with optimization...")
-        
+
         if hasattr(model_class, 'fit'):
             # Add validation set for early stopping
             val_size = int(0.2 * len(X_train))
             X_train_split, X_val = X_train[:-val_size], X_train[-val_size:]
             y_train_split, y_val = y_train[:-val_size], y_train[-val_size:]
-            
+
             # Try to fit with eval_set if supported
             try:
                 model_class.fit(
@@ -434,12 +430,12 @@ class RetrainingOrchestrator:
                 )
             except TypeError:
                 model_class.fit(X_train_split, y_train_split)
-        
+
         # Step 3: Evaluate retrained model
         eval_result = ModelEvaluator.evaluate_regression(
             model_class, X_test, y_test, X_val, y_val
         )
-        
+
         return model_class, eval_result
 
 
@@ -454,17 +450,17 @@ class DeploymentVerifier:
     def check_localhost_deployment(port: int = 7000, timeout: int = 5) -> Dict:
         """
         Check if Flask app is running on localhost.
-        
+
         Returns deployment information with localhost link
         """
         import requests
-        
+
         localhost_url = f"http://localhost:{port}"
-        
+
         try:
             response = requests.get(localhost_url, timeout=timeout)
             is_running = response.status_code == 200
-            
+
             return {
                 "is_running": is_running,
                 "localhost_url": localhost_url,
@@ -501,10 +497,10 @@ class DeploymentVerifier:
     ) -> Dict:
         """Verify Flask endpoint is working correctly."""
         import requests
-        
+
         try:
             response = requests.post(url, json=test_data, timeout=timeout)
-            
+
             return {
                 "success": response.status_code == 200,
                 "status_code": response.status_code,
@@ -528,7 +524,7 @@ class DeploymentVerifier:
         """Generate comprehensive deployment report."""
         accuracy_check = "✅ PASS" if model_eval.get("metrics", {}).get("accuracy", 0) >= accuracy_threshold else "❌ FAIL"
         deployment_check = "✅ RUNNING" if deployment_info.get("is_running") else "❌ NOT RUNNING"
-        
+
         return f"""\
 ═══════════════════════════════════════════════════════════════
 DEPLOYMENT VERIFICATION REPORT

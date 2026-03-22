@@ -68,7 +68,7 @@ class Planner:
         """
         features    = project_spec.get("features", project_spec.get("feature_cols", []))
         target      = project_spec.get("target",   project_spec.get("target_col", "output"))
-        deliverables = project_spec.get("deliverables", [])
+        project_spec.get("deliverables", [])
 
         prompt = _PLAN_PROMPT.format(
             spec_json    = json.dumps(project_spec, indent=2),
@@ -98,8 +98,8 @@ class Planner:
     @staticmethod
     def _default_plan(spec: dict, features: list, target: str) -> dict:
         endpoint = spec.get("endpoint_name", "radml-endpoint")
-        region   = spec.get("aws_region", "us-east-1")
-        port     = spec.get("flask_port", 7000)
+        spec.get("aws_region", "us-east-1")
+        spec.get("flask_port", 7000)
         return {
             "architecture_overview": (
                 f"Flask web application that accepts {len(features)} input features "
@@ -127,7 +127,7 @@ class Planner:
                 ],
                 "predictor.py": [
                     f"format_features(inputs: dict) -> str: convert {features} to CSV row in correct order",
-                    f"call_endpoint(csv_row: str, endpoint: str, region: str) -> float: invoke SageMaker",
+                    "call_endpoint(csv_row: str, endpoint: str, region: str) -> float: invoke SageMaker",
                     f"predict({', '.join(f'{f}: float' for f in features[:3])}, ...) -> dict: full prediction pipeline",
                 ],
                 "train.py": [

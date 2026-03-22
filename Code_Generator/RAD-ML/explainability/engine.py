@@ -153,7 +153,7 @@ class ExplainabilityEngine:
                             .get("workspace_dir",
                                  "Code_Generator/RAD-ML/workspace/current_app"))
         self._ws_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize debugging
         if DebugLogger is not None:
             self._debug = DebugLogger("ExplainabilityEngine")
@@ -184,12 +184,12 @@ class ExplainabilityEngine:
         """
         if self._debug:
             self._debug.debug("explain", "Starting explanation generation")
-        
+
         try:
             spec      = db_results.get("spec", {})
             dataset   = job_result.get("dataset", {})
             model     = job_result.get("model", {})
-            sm_meta   = job_result.get("sm_meta", {})
+            job_result.get("sm_meta", {})
             deploy    = job_result.get("deploy_url", "http://localhost:7000")
             sources   = db_results.get("top_sources", [])
             task_type = spec.get("task_type", "regression")
@@ -333,7 +333,7 @@ class ExplainabilityEngine:
         expected = {
             "regression":     f"a predicted **{target}** value (a number)",
             "classification": f"the predicted **{target}** category + confidence",
-            "clustering":     f"recommendations ranked by similarity to your input",
+            "clustering":     "recommendations ranked by similarity to your input",
         }.get(task_type, f"a predicted {target}")
 
         return [
@@ -398,9 +398,9 @@ class ExplainabilityEngine:
                     "_generate_diagram",
                     f"Generating architecture diagram for {task_type} task"
                 )
-            
+
             result = _build_diagram_png(task_type, job_result, self._ws_dir)
-            
+
             if self._debug:
                 if result:
                     self._debug.info(
@@ -412,9 +412,9 @@ class ExplainabilityEngine:
                         "_generate_diagram",
                         "Diagram generation returned empty (graphviz may be missing)"
                     )
-            
+
             return result
-            
+
         except FileNotFoundError as exc:
             if self._debug:
                 self._debug.warning(
@@ -424,7 +424,7 @@ class ExplainabilityEngine:
                 )
             logger.warning("Graphviz not found (%s) — skipping diagram", exc)
             return ""
-            
+
         except Exception as exc:
             if self._debug:
                 self._debug.error(

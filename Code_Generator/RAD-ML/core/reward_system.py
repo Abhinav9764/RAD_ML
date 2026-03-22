@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import ast
 import logging
-import re
 from typing import Optional
 
 log = logging.getLogger(__name__)

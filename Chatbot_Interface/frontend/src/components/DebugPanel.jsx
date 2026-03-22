@@ -5,6 +5,7 @@
  * a colour-coded checklist of all APIs, packages, and connectivity.
  */
 import { useState } from "react";
+import { apiUrl } from "../lib/api.js";
 
 const STATUS_COLORS = {
   ok:      { bg: "#0d2b1a", border: "#22c55e", dot: "#22c55e", text: "#86efac" },
@@ -29,7 +30,7 @@ export default function DebugPanel({ token }) {
     try {
       const headers = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch("/api/debug", { headers });
+      const res = await fetch(apiUrl('/debug'), { headers });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       setReport(await res.json());
     } catch (err) {

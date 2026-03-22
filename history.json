@@ -1,0 +1,430 @@
+{
+  "jobs": [
+    {
+      "created_at": "2026-03-22T11:38:08.282504+00:00",
+      "error": "",
+      "job_id": "724b81ac-1d3",
+      "logs": [
+        {
+          "message": "Starting data collection \u2026",
+          "step": "collection",
+          "ts": 1774179488.283144
+        },
+        {
+          "message": "Parsing prompt: test dummy",
+          "step": "parse",
+          "ts": 1774179490.574755
+        },
+        {
+          "message": "Intent classified -> intent=ML_MODEL  task=REGRESSION  domain='dummy'",
+          "step": "parse",
+          "ts": 1774179490.5769095
+        },
+        {
+          "message": "Search keywords: ['dummy']  |  Inputs: ['dummy']  |  Target: price",
+          "step": "parse",
+          "ts": 1774179490.5772955
+        },
+        {
+          "message": "Fallback datasets ready: ['harlfoxem/house-prices-dataset', 'camnugent/california-housing-prices', 'mirichoi0218/insurance']",
+          "step": "parse",
+          "ts": 1774179490.5778203
+        },
+        {
+          "message": "Tier 0 - found 2 matching local cached dataset(s)",
+          "step": "search",
+          "ts": 1774179490.6030405
+        },
+        {
+          "message": "Tier 1 - searching Kaggle + UCI + OpenML + HuggingFace",
+          "step": "search",
+          "ts": 1774179490.6035237
+        },
+        {
+          "message": "  query: 'dummy' (parallel providers, 10s budget)",
+          "step": "search",
+          "ts": 1774179490.6041148
+        },
+        {
+          "message": "    kaggle: 0 result(s)",
+          "step": "search",
+          "ts": 1774179490.6079836
+        },
+        {
+          "message": "    uci: 0 result(s)",
+          "step": "search",
+          "ts": 1774179492.3713362
+        },
+        {
+          "message": "    huggingface: 8 result(s)",
+          "step": "search",
+          "ts": 1774179492.942888
+        },
+        {
+          "message": "    openml: 0 result(s)",
+          "step": "search",
+          "ts": 1774179498.69516
+        },
+        {
+          "message": "    kaggle note: Kaggle credentials not available at ~/.kaggle/kaggle.json. Skipping Kaggle search.",
+          "step": "search",
+          "ts": 1774179498.6962733
+        },
+        {
+          "message": "  'dummy' -> Kaggle:0  UCI:0  OpenML:0  HuggingFace:8",
+          "step": "search",
+          "ts": 1774179498.6980212
+        },
+        {
+          "message": "Best candidate: 'Yoshitomo-Matsubara / Srsd-Feynman Easy Dummy'  source=HUGGINGFACE  score=0.400",
+          "step": "score",
+          "ts": 1774179498.6996744
+        },
+        {
+          "message": "[HUGGINGFACE] Yoshitomo-Matsubara / Srsd-Feynman Easy Dummy",
+          "step": "download",
+          "ts": 1774179498.7013545
+        },
+        {
+          "message": "  -> data.csv  rows=240000  score=0.700",
+          "step": "download",
+          "ts": 1774179547.7412882
+        },
+        {
+          "message": "[HUGGINGFACE] Yoshitomo-Matsubara / Srsd-Feynman Medium Dummy",
+          "step": "download",
+          "ts": 1774179547.7420785
+        },
+        {
+          "message": "  -> data.csv  rows=320000  score=0.700",
+          "step": "download",
+          "ts": 1774179616.7943265
+        },
+        {
+          "message": "Row threshold met - stopping early.",
+          "step": "download",
+          "ts": 1774179616.7952046
+        },
+        {
+          "message": "Building final dataset",
+          "step": "merge",
+          "ts": 1774179616.7979186
+        },
+        {
+          "message": "Final dataset: 100,000 rows x 1 cols  merged=False",
+          "step": "merge",
+          "ts": 1774179617.1950407
+        },
+        {
+          "message": "Uploading to S3",
+          "step": "upload",
+          "ts": 1774179617.1957438
+        },
+        {
+          "message": "S3 URI: s3://rad-ml-datasets/collected_data/datasets/724b81ac-1d3/724b81ac-1d3_dataset.csv",
+          "step": "upload",
+          "ts": 1774179689.5512714
+        },
+        {
+          "message": "Collection complete - 100,000 rows from 1 source(s)",
+          "step": "done",
+          "ts": 1774179690.1928933
+        },
+        {
+          "message": "Dataset ready \u2014 100000 rows, 1 cols",
+          "step": "collection",
+          "ts": 1774179690.216995
+        },
+        {
+          "message": "Starting code generation \u2026",
+          "step": "codegen",
+          "ts": 1774179690.2174137
+        },
+        {
+          "message": "Preprocessing 724b81ac-1d3_dataset.csv...",
+          "step": "preprocess",
+          "ts": 1774179691.8565164
+        },
+        {
+          "message": "Train: 80000 rows | Features (0): [] | Target: text",
+          "step": "preprocess",
+          "ts": 1774179692.317398
+        },
+        {
+          "message": "Uploading training and validation data derived from the collected dataset to S3...",
+          "step": "sagemaker",
+          "ts": 1774179692.3178778
+        },
+        {
+          "message": "Train data -> s3://rad-ml-datasets/collected_data/724b81ac-1d3/train/724b81ac-1d3_train.csv",
+          "step": "sagemaker",
+          "ts": 1774179714.2773547
+        },
+        {
+          "message": "Validation data -> s3://rad-ml-datasets/collected_data/724b81ac-1d3/validation/724b81ac-1d3_val.csv",
+          "step": "sagemaker",
+          "ts": 1774179714.277893
+        },
+        {
+          "message": "Launching SageMaker XGBoost training job with S3-backed collected data...",
+          "step": "sagemaker",
+          "ts": 1774179714.2784667
+        },
+        {
+          "message": "Job: radml-1774179714 | Status: InService | Endpoint: rad-ml-endpoint",
+          "step": "sagemaker",
+          "ts": 1774179714.2789323
+        },
+        {
+          "message": "Building structured ProjectSpec from prompt...",
+          "step": "understand",
+          "ts": 1774179714.2792556
+        },
+        {
+          "message": "Spec: task='test dummy' | type=regression | deliverables=['app.py', 'train.py', 'predictor.py', 'requirements.txt', 'README.md', 'tests/test_app.py', 'templates/index.html']",
+          "step": "understand",
+          "ts": 1774179715.3458514
+        },
+        {
+          "message": "Producing architecture plan (no code yet)...",
+          "step": "plan",
+          "ts": 1774179715.3467739
+        },
+        {
+          "message": "Plan: 7 files | deps: ['flask', 'boto3', 'pandas', 'numpy']",
+          "step": "plan",
+          "ts": 1774179715.5639648
+        },
+        {
+          "message": "Generating Streamlit app bundle...",
+          "step": "codegen",
+          "ts": 1774179715.5648513
+        },
+        {
+          "message": "Generated 5 files: ['app.py', 'test_app.py', 'README.md', 'requirements.txt', 'tests/test_quality_gate.py']",
+          "step": "codegen",
+          "ts": 1774180474.3189447
+        },
+        {
+          "message": "Streamlit app launched successfully; unit tests generated; quality gate file added for >=90% model score enforcement.",
+          "step": "validate",
+          "ts": 1774180474.4136853
+        },
+        {
+          "message": "Streamlit app running at http://localhost:50065",
+          "step": "deploy",
+          "ts": 1774180474.4184115
+        },
+        {
+          "message": "Generating explanation and architecture diagram...",
+          "step": "explain",
+          "ts": 1774180474.4266644
+        },
+        {
+          "message": "Explanation generated",
+          "step": "explain",
+          "ts": 1774180485.5618439
+        },
+        {
+          "message": "Code generation complete -> http://localhost:50065 (Streamlit app launched successfully; unit tests generated; quality gate file added for >=90% model score enforcement.)",
+          "step": "done",
+          "ts": 1774180485.6121588
+        },
+        {
+          "message": "App ready \u2192 http://localhost:50065",
+          "step": "codegen",
+          "ts": 1774180485.6154861
+        },
+        {
+          "message": "Pipeline complete \u2713",
+          "step": "done",
+          "ts": 1774180485.6191695
+        }
+      ],
+      "prompt": "test dummy",
+      "result": {
+        "app_path": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\app.py",
+        "dataset": {
+          "columns": [
+            "text"
+          ],
+          "merged": false,
+          "preview_rows": [
+            {
+              "text": "1.567521318793296814e-02 5.028885602951049805e-02 7.032883034485124934e-22 7.882885402068495750e-04"
+            },
+            {
+              "text": "7.887026667594909668e-02 2.343316674232482910e-01 5.312335647368106649e-21 1.848180033266544342e-02"
+            },
+            {
+              "text": "5.421639606356620789e-02 2.217943593859672546e-02 7.282591009177054476e-21 1.202489132992923260e-03"
+            },
+            {
+              "text": "4.418705999851226807e-01 2.366800978779792786e-02 1.400425132666983955e-22 1.045819744467735291e-02"
+            },
+            {
+              "text": "2.321204096078872681e-01 1.292875260114669800e-01 8.222750437796760865e-21 3.001027181744575500e-02"
+            },
+            {
+              "text": "2.119112201035022736e-02 6.224889680743217468e-02 6.604935813143274221e-21 1.319124014116823673e-03"
+            },
+            {
+              "text": "1.681699901819229126e-01 1.362009197473526001e-01 1.468748539751244073e-21 2.290490828454494476e-02"
+            },
+            {
+              "text": "3.393042087554931641e-01 5.231205746531486511e-02 8.594308013610790091e-21 1.774970255792140961e-02"
+            },
+            {
+              "text": "4.267915189266204834e-01 7.216872572898864746e-01 4.159954308427397990e-21 3.080100119113922119e-01"
+            },
+            {
+              "text": "2.240781858563423157e-02 1.759147942066192627e-01 1.102109517992155097e-21 3.941867034882307053e-03"
+            }
+          ],
+          "row_count": 100000,
+          "s3_uri": "s3://rad-ml-datasets/collected_data/datasets/724b81ac-1d3/724b81ac-1d3_dataset.csv"
+        },
+        "deploy_url": "http://localhost:50065",
+        "endpoint_name": "rad-ml-endpoint",
+        "explanation": {
+          "algorithm_card": {
+            "family": "Gradient Boosted Decision Trees",
+            "how_it_works": "XGBoost builds an ensemble of decision trees sequentially. Each new tree corrects errors of the previous ones by fitting the residuals. With learning rate \u03b7=0.2 and max_depth=6, the model balances expressiveness against generalisation. Early stopping (10 rounds) automatically halts training when validation error stops improving.",
+            "limitations": [
+              "Black-box \u2014 predictions are not directly explainable",
+              "May underperform on very small datasets (< 200 rows)",
+              "Requires numeric or encoded inputs"
+            ],
+            "metrics": [
+              "RMSE (Root Mean Squared Error)",
+              "MAE (Mean Absolute Error)",
+              "R\u00b2 Score"
+            ],
+            "name": "XGBoost Regressor",
+            "strengths": [
+              "Handles missing values natively",
+              "Works well on tabular data without scaling",
+              "Built-in regularisation prevents overfitting",
+              "Fast training on CPU with SageMaker ml.m5.large"
+            ],
+            "why_chosen": "XGBoost was selected because your task requires predicting a continuous numeric value. It handles mixed data types without manual normalisation, is robust to missing values, and consistently outperforms linear models on tabular data. Regularisation (\u03b1=0.1, \u03bb=1.0) prevents overfitting."
+          },
+          "architecture_diagram_b64": "iVBORw0KGgoAAAANSUhEUgAABXgAAAL4CAIAAABOfgg2AABBXklEQVR4nO3dfZxUdaH48bMLuwi6Woppdk3SyMqrPxXQ6yNokJhPXVILfAgVH7LSUpQnFU0UUdQLZoGBgDypgKEhJD6gIimKCyoaSj7duvfX76rpZU2FZXd/L5xe4zSzLAt8d+fMOe/3H77G2TPnnBnm+z0znz0zW1ZVtVsEAAAAEEJ5kLUAAAAACA0AAABASM5oAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAACEZoAAAAAIIRGgAAAIBghAYAAAAgGKEBAAAAEBoAAACA+HFGAwAAABCM0AAAAAAEk8zQ8Pobr8+eM3vOfXMeWvjQIYcckrmyX79+b7391s4775y7zOzZs+9/4P5Tv39q3hreePON8ePHZ//3tl/e9sabb2Qur1q1qomNzp49e+79c/fff/+99977zB+e2fx9zqx2c2+VK+8ObnJbuXK3+5Of/KSZW2z+kgAAAKREWVXVblHirFq16utf/3oURV//xtdv/+Xt3/rWt6IomjR50huvv/Haa6/dc889uct06NBh8uTJd029a97v5uWu4S//9Zdjvn1MXV1dWVnZAw880Llz58zy2Rs2sdFbbrnlO8d+Z8v2eYvl3cEt3lbz92Tr9xkAAICESeYZDVmvrnp11y/uGkVR+/btO3ToMGPGjJ69euYt89FHH40YMWLAgAF517/04kv/Z///E0XRPvvs88ofX2n+Rlf9cdWXv/zl3BMHVq1adeWVV/527m/v++19X/7yl3fYYYfbfnnbPffec99v79v/gP3zb55zq0GDB825b84jjz5y7LHHRlHUxA0L7+CqVatuvfXWc845Z8cdd5wwccLsObNn3j2zY8eOmZ9m1vzoY49m1pzd7sCBAzts22Hm3TMLt5W3nuySeadI5O5/Zgeavr8AAAAkSdso0bp3777kqSVRFPXo0WPRokWvv/767rvvXlFRUVtbm7vYK398pVOnTnm3ffzxx3v06FH9fHWPHj2eePyJk048qZkbPfzww19++eXcayrbVb7wwgvXXnvt9773veFXD3///ffvvPPO5dXLv/SlL02eMrlXz16NrqeisuJvf/vb9/p8b4899pg9Z/aCBQuuvOrKjd2w8A5Wtqu8//77H3/88TFjxsz73by5c+d+//vfHzhw4ODBgyvbVWbWvOeee95z7z0LFizIrmf06NEDBgzo+4O+o28enbet4cOH560ns+TGHofsDhSuqpmPJAAAACUnmaGhorJi9pzZFRUVX/3qV4/qcVQURcccc8w+/7rP8ccdv8suuxxyyCFPPvlk7vJt27Rdv379oEGDuh3UbeKEiZk33k888UT/s/rfcvMthx1+2JQpU5q50bKyspqamoGXDsz9UUNDQ2adv/vd76686sr169dnu0aHDh3atGlTV1dXuMLy8vJ77t7wIYi33367qqoqUxM2dsPCO1hXV5e5m4cfcfjAgRv2Z/bs2fMXzN/wgZmyssya33jjjcyaCxVuq3A9jSorL8tcyO5AE7sNAABAwiQzNNSuqz35eydHUXThhReeeuqpv/71r/fca8/ML9J79OjRs1fPvNBwwAEH/PGPfxw1alTulR988EF9ff1uu234Douamprmb7RQ/acyl9etW1dRUXFav9PWrl1bXl5+0EEHbexd97p169asWfOP/2nY8J82bdo0esM2bdoU3sG69XWZjZaXl5eVbXjzX1dXV7OmptE1FyrcVuF6CuPC9ttvX1lZmbmc3YGN7TYAAADJk/DvaHjyySf3P2D/bt26vfLyP75kYenSpd27d89dZocddhg2bNivfvWrwps/vujxQYMHLX5y8VbuRtu2bY8++ugoik444YQ/LPnDc889l/lmhKOOPuonP93oH25oqM9vABu7YdN3cMWKFcf0PibzZymGDB3S6JpzlZWXlZeXF26rcD2ZJTMhZu+9946iqM/3+jQ0NHe3AQAASJ5kntGQ9frrr3/zG9/s3bv3U0ueylzz8ccfv/vuu507d8580iFqiNpWtL399tuf/sPThTd/5JFHBg0e1PNb//T9kRWVFXPvn5u5/Nxzz1034rpN7sbaT9Yed9xxP7rwR2vWrLn0kkvbtWt34003nnHm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yrtnzr5t7LhFjy845eTTb73ltntnTcu8kqusrHhp5cujRt1y0knHDR068MILf/7DH55mtqWVtdrTOLOh08/oO3r0mNWrX5+/4L7sGjLbfWbp41s8GKGkrVr12pf32D1vdIwd86vMaLrmF1fkXt/0YSt7q+zKbx49dsbMSU888dQD98975pnnrrv+6rybNDEqb7xxxIIFC+fNW/C97333oosvHH7ViMrKivff/+C0fmd3+soeU6bcITRAqx2dCwdvo0fhjR3N6+vqc4dz27Zt89aWO7cceeRh2ct5oaFRefNMozuWd5PCyQooOUJDU554fPFNN42YPv3eyy8b9uTihXvssXvm+vbt27dpU15XV19fX79kyTO5N6moqJg2fWJZWVlNzYdDh14dRVF2mYMP7jZk8PAoiubPXzjwsp99+qOGlStfrqurr62tXbnylfr6+m222SaznoaGKPMSbcGChwcNvrTlngFQqNWexnkb+uCD/z3u+N5HHX3kdtttm1kgu90tGIyQDG3btlm/fv2No27NGx0ZeddvcqTkrfy+++5/9NFFPXsePWzY5QsffuyIIw7Nu0nhdrNj7ZBDDx427JooiubOfWDhwkeiKCorK5szZ24URW+9+XZVVVWrPDyQIk0cnQsHb11dfeFReGNH84aGhtzh/OD8+/LWlju3jBp1bfZydt+uvmbYV7+6Z4cOHaZNn/inP71x9fDrNjbP3Db2117lQhoIDZ+pr6/PzMtt2rSpq1sfRdGgQVd269alf//TTzjx2DZt2pxz9oVr164tLy/v0uWAzMu19es3vL9p9ONzWdllysrK8h792trazHrWrl2Xt56Ghvr6+rrM5XXr1gX/h4cmtNrTOG9DE+/89UMPPTL1rpnZ74LKbncLBiMkw3777fvaq6vH3jY6b3Rk5F2/yZGSa8cdP9+p0x7V1SvmzJm7aNET8x6c09DQkHeTwu1mx1p5eXlmQqirq6+p+TAzotesqcks1tDQ0FqPEKRFE0fnRsd74VF4Y0fzvOFcuLbcuSX38uBBV2XWkCkLz1cvydvDwnnm09DgVS4kn7868ZmXXnr5sMMOyVThF198uapqu+kz7ly+/IWBA4d2735EdfWKXr2OjqLoyCMPO/+Cf5pDm+mZZ57t3btXFEW9e/daunTDmWNNaNOmTffuR0RRdOyxvZZ+eppZeXlZebl/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c+IJpw4afOn8Bx964IEHe/Y6+thje2UWrqyseHDe7xcv/sN111+dt/yPf3z+t44+bpddvnDBjwYceeRh2ctPPfV05raDh1w6b96CuXPnffe7xw8afMnAS4dWVFS8//4Hp/U7e/fd/2Xa9IlCAzTznUauv664Y9f9z2v+Q5cdxdf84orRo8esXv36/AX3TZo0NXfIH3d877xbtWtXeffM2beNHbfo8QWnnHz6rbfcdu+saY2GhsLJJIqiwsHe6OYqKyteWvnyqFG3nHTScUOHDvz4k0/yJo3sVgpXOHbMr374w9NUBpJq68c+ALElNJAcFRUV06ZPbNu27V57feU7x/aZc9+MPfbYPfOj9u3bt2lTfvDBXYcNvTqKokWPPVFXV5/5UX19/ZIlz0RRdMQRh+Yt/8Tji2+6acT06fdeftmwUaOuzV7ObvHgg7sNGTw8iqL58xcOvOxnG771pLxszpy5URT9+c9/qaqqKsbDAKX9TmML3m9kR/GNo2497vjeRx195HbbbfvpCM0f8j//+U+6dD1gypTpDy98rL6+YeXKl+vq6mtra1eufKW+vn6bbbbJXW124cLJoa6uvnCwNzrDNDREmeC4YMHDgwZfWl9fnzdpZJk9SJUgYx+A2BIaSOB3NJx77ll9+pzYpk2bc86+cO3ateXl5V26HFBXV19RUZFZsry8vKysLHN5/fq6+voNbwkKlx806Mpu3br073/6CScem3t58KCrMrfNriR3H9asqclcbmhoaMV7D8l5p7G57zeyo3jsbaMfeuiRqXfNzHzDYuGQv/XWX2ZvVVtbm8kBa9euy9w8T3bhq68eljc5NDrYG51hGhrq6+vrMpfXrVuXXaaQ2YP0CDX2AYgtf3WCBFqy5On99tu3unpFr15HR1F05JGHnX/BhgCxvHpFz549oijq9e2jCxJBlLd8VdV202fcuXz5CwMHDu3R48js5e7dj8je5Jlnnu3de8NHMHr37rV06XOf/mZVXIAA7zQy/rrijs16NPfd95sL5j/Url27ysrKTQ755iucTBod7I1urk2bNplJ49hjey195rnCSSOr0dmjvLysvNyRmkRpibEPQNw4o4EEevPNt/b+eucfnnnuNb+4sm+/U+rW1w0bdk0URddfP/rGm0acfkbf5ctf+Pjjj/Nudf11N1074qrs8jU1Hy567MlZs6eVl5f/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mDFz0n77/WsURR077jRu/NiZMyePGnVt3pkCn//8526//dZp0ydOmjxup512vOjiCzt06DBp8rjsAjvv3HHChNtnzJw0YcLtO+/cMXP9JZf8dPqMO3/3u1m9vn107s782791W/rMs4U7ufq1P+2y6xcKd+yMM/ve/8C9c++/5/DDD8k9eSHvchRFuTsGAACtTGgAUuSQQw/+4yuvfno2QcWD835/110zLh90ydS7Zv7wh+cNvHToiOuuiqJo0OBL5z/4UN++/R9+ZFG7dpW5Nx8yZOCCBQtPP+2ceb/7/UUXXzh2zK8++uijs/pfkF1g8JBL581b0K/vWfPmLRg0+JIoiioqKt5//4PT+p194YU/v+KKQblrO/yIQxcv/kPhTh5++CFPP/1s4Y79+Mfn9+t71iU/H3ziScc3fTcLdwwAAFqNj04AyVdRUTFt+sSysrKamg+HDr06iqL6+volS56JouiIIw7dY4/dM4u1b9++TZvygw/uOuzTZRY99kRd3T8+15BxyKEHDxt2TRRFc+c+sHDhI4UbOvjgbkMGD4+iaP78hQMv+9mGmlteNmfO3CiK/vznv1RVVeUuvN1229XUfJi3k23btt1rr69859g+c+6bkbdjTzy++KabRkyffu/llw3L2255eVm4RwsAALaK0AAkX/brD7LWr6/LfDlCmzZtzjn7wrVr15aXl3fpckBdXX1FRUVmmfLy8rKyf3oDn72mrq4+txFk5S2f2fSaNTWZyw0NDdnrv/rVPf/0p9cb3clzzz2rT58TC3ds0KAru3Xr0r//6SeceOzgQVdl48L221dl9xkAAIrORyeAVKuuXtGr14avTjjyyMPOv2DD+/zl1St69uwRRVGvbx+d1w1efHFl5kennNrn0oEXZ04lyP7ZiCiKnnnm2d69e0VR1Lt3r6VLn/v01InP4kKuo47qvuixJxv90ZIlT++33755O1ZVtd30GXcuX/7CwIFDu3c/IoqimpoPO3feK4qiE048LjdhZOTtGAAAtBovQ4FUu/66m7777ydMn3Hn2Wefec3V12+45vrRp5/Rd8bMSd/85tfXravNXXjk9aP7nfb96TPu/Na3evzmjg1/02HZc9Xjxo/NLjDqhltOPOm4GTMnnXjScTeMvLmJ7Xb6yh5vvvlWoz9688239v565xtGjs7dsZqaDxc99uSs2dPuvmfK7bffEUXRtdfeMGbs6KnTJu62267Z/Xz7rbczuSRvxwAAoNWUVVXt1npbA9gKF/f/xzvzCbO6lvoDedRRRy5a1PgZDQApMeCUZZkLYyZ3Kva+ABCSMxoAikBlAAAgqYQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAQGgAAAAA4scZDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAgNAAAAADx44wGAAAAIBihASg9A05ZVuxdAGCrmMkBEkxoAErGmMmdir0LAARmbgdIHqEBAAAACEZoAEqSc24BSpc5HCDZhAaglDjDFiBJzOoAiSQ0AKXKL8QASpHZGyDxhAaghH/95dUqQGnJnbedzgCQVEIDUHq8NgUodWZygAQrq6rardj7ALAlLu7/VvbyhFldPYgAceZcBoD0cEYDUKp8hgKgVKgMAKnijAYgOec1OLUBIG7yvkzHJyYA0kBoAJLWGjJ8mAKgiBr9sl6VASAlhAYgsa0BgPhQGQDSQ2gAkkNuAIghiQEgbYQGIIEUB4Ci0xcAUktoAAAAAILx5y0BAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAAAAoQEAAACIH2c0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAIDQAAAAAMSPMxoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAIBihAQAAAAhGaAAAAACCERoAAACAYIQGAAAAQGgAAAAA4scZDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQjNAAAAAABCM0AAAAAMEIDQAAAEAwQgMAAAAQhfL/AV1Uo8qevDv6AAAAAElFTkSuQmCC",
+          "code_preview": {
+            "README.md": "# RAD-ML Generated App\n\n## Live App\n- URL: `http://localhost:50065`\n- Endpoint: `rad-ml-endpoint`\n- Training job: `radml-1774179714`\n- Status: `InService`\n\n## Quality Gate\n- Classification models must reach at least 90% Accuracy.\n- Regression models must reach at least 0.90 R2.\n- If the threshold is missed, revise features, clean the dataset, rebalance classes if needed, and retrain.\n\n## Generated Files\n- `app.py`: Streamlit inference app\n- `test_app.py`: unit tests for inference helpers\n- `tests/test_quality_gate.py`: threshold enforcement for model metrics\n- `requirements.txt`: local dependencies",
+            "app.py": "\"\"\"\nPredictive ML Streamlit app generated by RAD-ML.\nCalls a SageMaker endpoint for real-time predictions with a clean dark UI.\n\"\"\"\nfrom __future__ import annotations\n\nimport io\nimport os\nimport re\nimport sys\nfrom pathlib import Path\nfrom typing import Dict, List, Tuple\n\nimport streamlit as st\nimport yaml\n\ntry:\n    import boto3\nexcept Exception:\n    boto3 = None\n\ntry:\n    import pandas as pd\nexcept Exception:\n    pd = None\n\nROOT = next(\n    (parent for parent in Path(__file__).resolve().parents if (parent / \"config.yaml\").exists()),\n    Path(__file__).resolve().parent,\n)\nsys.path.insert(0, str(ROOT))\nos.chdir(ROOT)\n\n_cfg_path = ROOT / \"config.yaml\"\nCFG = {}\nif _cfg_path.exists():\n    try:\n        with open(_cfg_path, encoding=\"utf-8\") as f:\n            CFG = yaml.safe_load(f) or {}\n    except Exception:\n        CFG = {}\nos.environ.setdefault(\"AWS_EC2_METADATA_DISABLED\", \"true\")\n\n# \u2500\u2500 Page config & high-contrast theme \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nst.set_page_config(\n    page_title=\"Test Dummy\",\n    page_icon=\"\ud83d\udd2e\",\n    layout=\"wide\",\n    initial_sidebar_state=\"expanded\",\n)\n\nst.markdown(\"\"\"\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');\n  html, body, [class*=\"css\"] { font-family: 'Inter', sans-serif; }\n\n  /* \u2500\u2500 App background \u2500\u2500 */\n  [data-testid=\"stAppViewContainer\"] {\n    background: linear-gradient(160deg, #0b0e1a 0%, #111827 100%);\n  }\n\n# ... (354 more lines)",
+            "requirements.txt": "streamlit\nboto3\npandas\npyyaml\npytest",
+            "test_app.py": "import unittest\nfrom unittest.mock import MagicMock, patch\n\ndef _mock_streamlit_module():\n    st = MagicMock()\n    st.sidebar.__enter__.return_value = st\n    st.sidebar.__exit__.return_value = False\n    tab_a = MagicMock()\n    tab_b = MagicMock()\n    tab_a.__enter__.return_value = st\n    tab_a.__exit__.return_value = False\n    tab_b.__enter__.return_value = st\n    tab_b.__exit__.return_value = False\n    st.tabs.return_value = [tab_a, tab_b]\n    col_a = MagicMock()\n    col_b = MagicMock()\n    col_a.__enter__.return_value = st\n    col_a.__exit__.return_value = False\n    col_b.__enter__.return_value = st\n    col_b.__exit__.return_value = False\n    st.columns.return_value = [col_a, col_b]\n    form_ctx = MagicMock()\n    form_ctx.__enter__.return_value = st\n    form_ctx.__exit__.return_value = False\n    st.form.return_value = form_ctx\n    spinner_ctx = MagicMock()\n    spinner_ctx.__enter__.return_value = st\n    spinner_ctx.__exit__.return_value = False\n    st.spinner.return_value = spinner_ctx\n    progress_bar = MagicMock()\n    progress_bar.progress.return_value = None\n    st.progress.return_value = progress_bar\n    st.file_uploader.return_value = None\n    st.form_submit_button.return_value = False\n    st.button.return_value = False\n    return st\n\nclass TestMLApp(unittest.TestCase):\n    def setUp(self):\n        import sys\n        self._st_patcher = patch.dict(sys.modules, {'streamlit': _mock_streamlit_module()})\n        self._st_patcher.start()\n        import importlib\n        import app as app_module\n        importlib.reload(app_module)\n        self.app = app_module\n\n    def tearDown(self):\n        self._st_patcher.stop()\n\n    def test_encode_feature_numeric(self):\n        self.assertEqual(self.app._encode_feature('area', ' 1500.5 '), '1500.5')\n\n    def test_encode_feature_strips_units(self):\n        self.assertEqual(self.app._encode_feature('area', '200sq.ft'), '200.0')\n\n    def test_encode_feature_region(self):\n        val = self.app._encode_feature('region', 'north')\n        self.assertTrue(val.isdigit())\n\n\n# ... (12 more lines)",
+            "tests/test_quality_gate.py": "import json\nfrom pathlib import Path\n\nimport pytest\n\nTHRESHOLD = 0.90\nMETRIC_NAME = \"r2\"\nMETRIC_LABEL = \"R2\"\n\n\ndef test_model_quality_gate():\n    metrics_path = Path(__file__).resolve().parent.parent / \"metrics.json\"\n    if not metrics_path.exists():\n        pytest.skip(\"metrics.json not generated yet\")\n\n    metrics = json.loads(metrics_path.read_text(encoding=\"utf-8\"))\n    score = float(metrics.get(METRIC_NAME, 0.0))\n    assert score >= THRESHOLD, (\n        f\"Model failed the quality gate: {METRIC_LABEL}={score:.4f} < {THRESHOLD:.2f}. \"\n        \"Improve the dataset or features, retrain, and regenerate the app.\"\n    )"
+          },
+          "data_story": {
+            "columns": [
+              "text"
+            ],
+            "keywords_used": [
+              "dummy"
+            ],
+            "merged": false,
+            "row_count": 100000,
+            "search_strategy": "The agent searched **Kaggle**, **UCI ML Repository**, and **OpenML** simultaneously. Candidates were scored on: keyword match (40%), row count (30%), column alignment with your input parameters (20%), and recency/popularity (10%). The top-scoring datasets were downloaded and merged if needed to meet the 500-row threshold.",
+            "sources": [
+              {
+                "name": "Yoshitomo-Matsubara / Srsd-Feynman Easy Dummy",
+                "rows": 240000,
+                "score": 0.7,
+                "source": "HUGGINGFACE",
+                "url": "https://huggingface.co/datasets/yoshitomo-matsubara/srsd-feynman_easy_dummy"
+              },
+              {
+                "name": "Yoshitomo-Matsubara / Srsd-Feynman Medium Dummy",
+                "rows": 320000,
+                "score": 0.7,
+                "source": "HUGGINGFACE",
+                "url": "https://huggingface.co/datasets/yoshitomo-matsubara/srsd-feynman_medium_dummy"
+              }
+            ],
+            "summary": "Collected **100,000 rows** \u00d7 **1 columns** from **1 source(s)**."
+          },
+          "narrative": "## Your RAD-ML Pipeline is Complete \ud83c\udf89\n\n**What your model does:** Given 1 input(s)\n(dummy),\nyour model predicts **price**.\n\n**Dataset:** 100,000 rows collected from\n1 source(s).\n\n\n**Algorithm:** XGBoost (regression mode)\ntrained on AWS SageMaker with\n80,000 training rows\nand 20,000 validation rows.\n\n**How to use:** Open the app link \u2192 fill the form \u2192 click Predict.\nThe model returns a price estimate in under a second.",
+          "usage_guide": [
+            {
+              "detail": "Visit [http://localhost:50065](http://localhost:50065) in your browser.",
+              "icon": "\ud83c\udf10",
+              "step": 1,
+              "title": "Open the live app"
+            },
+            {
+              "detail": "The form has **1 input fields**: `dummy`. Enter realistic values \u2014 stay within the training data range for best accuracy.",
+              "icon": "\u270f\ufe0f",
+              "step": 2,
+              "title": "Fill in the input form"
+            },
+            {
+              "detail": "Your inputs are sent to the AWS SageMaker endpoint. Inference typically takes under 1 second.",
+              "icon": "\u25b6\ufe0f",
+              "step": 3,
+              "title": "Click Predict"
+            },
+            {
+              "detail": "The app returns a predicted **price** value (a number). This comes directly from the trained XGBoost model.",
+              "icon": "\ud83d\udcca",
+              "step": 4,
+              "title": "Read the result"
+            },
+            {
+              "detail": "ML models are probabilistic \u2014 not guaranteed to be correct. Use the prediction as a guide, especially for edge-case inputs.",
+              "icon": "\u26a0\ufe0f",
+              "step": 5,
+              "title": "Interpret responsibly"
+            }
+          ]
+        },
+        "generated_files": {
+          "README.md": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\README.md",
+          "app.py": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\app.py",
+          "requirements.txt": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\requirements.txt",
+          "test_app.py": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\test_app.py",
+          "tests/test_quality_gate.py": "C:\\Users\\sabhi\\OneDrive\\Desktop\\RAD-ML-v8\\Code_Generator\\RAD-ML\\workspace\\current_app\\tests\\test_quality_gate.py"
+        },
+        "input_params": [
+          "dummy"
+        ],
+        "model": {
+          "feature_cols": [],
+          "stats": {
+            "num_features": 0,
+            "total_rows": 100000,
+            "train_rows": 80000,
+            "val_rows": 20000
+          },
+          "target_col": "text",
+          "task_type": "regression"
+        },
+        "sm_meta": {
+          "algorithm": "AWS SageMaker XGBoost",
+          "endpoint_name": "rad-ml-endpoint",
+          "job_name": "radml-1774179714",
+          "model_name": "model-radml-1774179714",
+          "s3_output": "s3://rad-ml-datasets/models/radml-1774179714/",
+          "source_dataset_s3_uri": "s3://rad-ml-datasets/collected_data/datasets/724b81ac-1d3/724b81ac-1d3_dataset.csv",
+          "status": "InService",
+          "target_column": "text",
+          "task_type": "regression",
+          "train_s3_uri": "s3://rad-ml-datasets/collected_data/724b81ac-1d3/train/724b81ac-1d3_train.csv",
+          "validation_s3_uri": "s3://rad-ml-datasets/collected_data/724b81ac-1d3/validation/724b81ac-1d3_val.csv"
+        },
+        "target_param": "price",
+        "training_data": {
+          "source_dataset_s3_uri": "s3://rad-ml-datasets/collected_data/datasets/724b81ac-1d3/724b81ac-1d3_dataset.csv",
+          "train_s3_uri": "s3://rad-ml-datasets/collected_data/724b81ac-1d3/train/724b81ac-1d3_train.csv",
+          "validation_s3_uri": "s3://rad-ml-datasets/collected_data/724b81ac-1d3/validation/724b81ac-1d3_val.csv"
+        },
+        "validation_summary": "Streamlit app launched successfully; unit tests generated; quality gate file added for >=90% model score enforcement."
+      },
+      "status": "done",
+      "updated_at": "2026-03-22T11:54:45.633366+00:00",
+      "updated_at_epoch": 1774180485,
+      "user_id": "1"
+    }
+  ]
+}

@@ -111,9 +111,10 @@ app = Flask(__name__)
 _auth_cfg = CONFIG.get("auth", {})
 app.config["JWT_SECRET_KEY"]             = _auth_cfg.get("jwt_secret_key", "dev-secret-change-me")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"]   = False   # handled by expires_delta in create_access_token
-app.config["JWT_TOKEN_LOCATION"]         = ["headers", "cookies"]
+app.config["JWT_TOKEN_LOCATION"]         = ["headers", "cookies", "query_string"]
 app.config["JWT_COOKIE_SECURE"]          = False   # True in production with HTTPS
 app.config["JWT_COOKIE_CSRF_PROTECT"]    = False   # simplify for SPA
+app.config["JWT_QUERY_STRING_NAME"]      = "token"
 
 jwt = JWTManager(app)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
@@ -315,6 +316,16 @@ def pipeline_status(job_id: str):
     })
 
 
+import math
+def _clean_nans(obj):
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _clean_nans(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_nans(v) for v in obj]
+    return obj
+
 @app.route("/api/pipeline/stream/<job_id>")
 @jwt_required()
 def pipeline_stream(job_id: str):
@@ -327,10 +338,11 @@ def pipeline_stream(job_id: str):
         sent = 0
         while True:
             while sent < len(job.logs):
-                yield f"data: {json.dumps(job.logs[sent])}\n\n"
+                yield f"data: {json.dumps(_clean_nans(job.logs[sent]))}\n\n"
                 sent += 1
             if job.status in ("done", "error"):
-                yield f"data: {json.dumps({'type': job.status, 'result': job.result, 'error': job.error})}\n\n"
+                payload = {'type': job.status, 'result': job.result, 'error': job.error}
+                yield f"data: {json.dumps(_clean_nans(payload))}\n\n"
                 break
             yield 'data: {"type":"heartbeat"}\n\n'
             time.sleep(2)

@@ -10,7 +10,6 @@ Includes metrics for:
 """
 from __future__ import annotations
 import logging
-from typing import Any
 
 import numpy as np
 
@@ -20,7 +19,7 @@ try:
     from sklearn.metrics import (
         mean_squared_error, mean_absolute_error, r2_score,
         accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
-        confusion_matrix, classification_report,
+        confusion_matrix,
         silhouette_score, davies_bouldin_score, calinski_harabasz_score,
     )
 except ImportError:
@@ -218,7 +217,7 @@ class MetricsCalculator:
     """Unified metrics calculator for all task types."""
 
     @staticmethod
-    def compute(task_type: str, y_true: np.ndarray | None = None, 
+    def compute(task_type: str, y_true: np.ndarray | None = None,
                 y_pred: np.ndarray | None = None, y_pred_proba: np.ndarray | None = None,
                 X: np.ndarray | None = None, labels: np.ndarray | None = None) -> dict:
         """

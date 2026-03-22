@@ -293,7 +293,7 @@ function PipelineDot({ status }) {
 function FilterChip({ label, count, active, color, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding: '2px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
+      padding: '2px 10px', borderRadius: 20, cursor: 'pointer',
       background: active ? `${color}22` : 'transparent',
       color:      active ? color : 'var(--text3)',
       border:     `1px solid ${active ? `${color}44` : 'transparent'}`,

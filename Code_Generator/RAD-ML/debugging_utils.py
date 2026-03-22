@@ -8,10 +8,9 @@ for all agents in the RAD-ML pipeline.
 import json
 import logging
 import traceback
-import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 
@@ -45,7 +44,7 @@ class ErrorContext:
     user_message: str = ""
     recovery_action: str = ""
     component: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         data = asdict(self)
@@ -55,11 +54,11 @@ class ErrorContext:
 
 class DebugLogger:
     """Centralized debugging and logging system."""
-    
+
     def __init__(self, component_name: str, log_file: Optional[Path] = None):
         """
         Initialize the debug logger.
-        
+
         Parameters
         ----------
         component_name : str
@@ -73,7 +72,7 @@ class DebugLogger:
         self.warnings: List[str] = []
         self.info_messages: List[str] = []
         self.debug_messages: List[str] = []
-        
+
         # Set up logging
         if not self.logger.handlers:
             handler = logging.StreamHandler()
@@ -83,7 +82,7 @@ class DebugLogger:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.DEBUG)
-        
+
         # Optional file logging
         self.log_file = log_file
         if log_file:
@@ -104,7 +103,7 @@ class DebugLogger:
     ) -> ErrorContext:
         """
         Log an error with full context.
-        
+
         Parameters
         ----------
         error : Exception
@@ -117,7 +116,7 @@ class DebugLogger:
             User-friendly error message
         recovery_action : str
             Suggested recovery action
-            
+
         Returns
         -------
         ErrorContext
@@ -133,15 +132,15 @@ class DebugLogger:
             recovery_action=recovery_action or self._get_recovery_action(category),
             component=self.component_name
         )
-        
+
         self.errors.append(error_context)
-        
+
         # Log with appropriate severity
         self.logger.error(
             f"[{category.value}] {error_context.error_message}",
             extra={'user_message': error_context.user_message}
         )
-        
+
         return error_context
 
     def log_warning(self, message: str, context_data: Optional[Dict[str, Any]] = None) -> None:
@@ -220,11 +219,11 @@ class DebugLogger:
 
 class ErrorHandler:
     """Decorator for wrapping functions with error handling."""
-    
+
     def __init__(self, logger: DebugLogger, default_return: Any = None):
         """
         Initialize error handler.
-        
+
         Parameters
         ----------
         logger : DebugLogger
@@ -242,14 +241,14 @@ class ErrorHandler:
     ):
         """
         Decorator for automatic error handling.
-        
+
         Parameters
         ----------
         category : ErrorCategory
             Category of errors this function might throw
         default_return : Any
             Value to return if error occurs
-            
+
         Returns
         -------
         callable
@@ -277,7 +276,7 @@ class ErrorHandler:
 
 class PerformanceMonitor:
     """Monitor performance and detect bottlenecks."""
-    
+
     def __init__(self, logger: DebugLogger):
         """Initialize performance monitor."""
         self.logger = logger
@@ -288,7 +287,7 @@ class PerformanceMonitor:
         if operation_name not in self.timings:
             self.timings[operation_name] = []
         self.timings[operation_name].append(duration)
-        
+
         # Log if slow
         if duration > 5.0:  # 5 seconds
             self.logger.log_warning(
@@ -389,7 +388,7 @@ def handle_api_error(
 # ── Context Managers for Debugging ────────────────────────────────────────
 class DebugContext:
     """Context manager for automatic error handling and timing."""
-    
+
     def __init__(
         self,
         logger: DebugLogger,
@@ -398,7 +397,7 @@ class DebugContext:
     ):
         """
         Initialize debug context.
-        
+
         Parameters
         ----------
         logger : DebugLogger
@@ -424,7 +423,7 @@ class DebugContext:
         """Exit context."""
         import time
         duration = time.time() - self.start_time
-        
+
         if exc_type is None:
             self.logger.log_debug(f"Completed: {self.operation_name} ({duration:.2f}s)")
             if self.monitor:
@@ -438,7 +437,7 @@ class DebugContext:
                     'duration': duration
                 }
             )
-        
+
         return False  # Re-raise exception
 
 
